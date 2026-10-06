@@ -4,6 +4,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-07
+
 ### Added
 
 - `djdojo` downloads a YouTube playlist as lossless AIFF or FLAC, the whole playlist in one folder, with title, artist, album, track number and square cover art in every file.
@@ -12,4 +14,5 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/commits/main
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ronnidc/djdojo/releases/tag/v1.0.0
