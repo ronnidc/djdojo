@@ -13,7 +13,8 @@ only on newer models, FAT32 sticks. One bash script (`djdojo`) and one yt-dlp co
   and symlinks `djdojo` into `bin`, because `djdojo` looks for `djdojo.conf` next to its own
   resolved path (`readlink -f "$0"`).
 - The private publish guide (accounts, the tap token, private test material) is
-  `.claude/plans/djdojo-publish-guide.md`, gitignored.
+  `.claude/plans/djdojo-publish-guide.md`, gitignored. It is a symlink into the private dotfiles
+  repo, so edits go to the link's target.
 
 ## Conventions
 
