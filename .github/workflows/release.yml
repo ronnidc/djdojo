@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check that the tag matches the version in djdojo and CHANGELOG.md
+        run: |
+          version=$(sed -n 's/^version=//p' djdojo)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "djdojo says $version but the tag is ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\] - " CHANGELOG.md; then
+            echo "CHANGELOG.md has no released section for $version"
+            exit 1
+          fi
+      - run: bash -n djdojo
+      - run: shellcheck djdojo
+      - name: GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+      - name: Update the Homebrew tap
+        # The tap points at the tag's tarball, so it only needs the new URL and
+        # checksum. GitHub keeps tag tarballs stable, so the checksum holds.
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/v${version}.tar.gz"
+          sha=$(curl -sSL "$url" | shasum -a 256 | cut -d ' ' -f 1)
+          gh auth setup-git
+          gh repo clone ronnidc/homebrew-tap tap
+          cd tap
+          sed -i "s|^  url .*|  url \"$url\"|; s|^  sha256 .*|  sha256 \"$sha\"|" Formula/djdojo.rb
+          if ! grep -q "$sha" Formula/djdojo.rb || ! grep -q "$url" Formula/djdojo.rb; then
+            echo "Formula/djdojo.rb was not updated"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "djdojo $version"
+          git push

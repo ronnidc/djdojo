@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash -n djdojo
+      - run: shellcheck djdojo
+      # The help text is the one path that needs neither yt-dlp nor macOS
+      - run: 'bash djdojo --help | grep -q "^Usage: djdojo"'
+      - run: bash djdojo --version | grep -q "^djdojo [0-9]"

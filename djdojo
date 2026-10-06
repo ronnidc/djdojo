@@ -1,0 +1,318 @@
+#!/usr/bin/env bash
+# djdojo - download a YouTube playlist as AIFF or FLAC for DJ practice.
+# Usage: djdojo PLAYLIST_URL_OR_ID [...] [aiff|flac] [chrome|safari|firefox]
+set -euo pipefail
+
+version=1.0.0
+
+usage() {
+  cat <<'EOF'
+Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox ...] [yt-dlp options ...]
+
+Downloads a YouTube playlist as lossless audio files for DJ practice, the whole playlist in one folder.
+
+  PLAYLIST    playlist link, or just its ID (the part after list=), a single video works too
+  aiff        plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute
+  flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer
+  chrome ...  YouTube login from that browser. Without one, Firefox, Safari and Chrome are tried
+  --no-cookies-from-browser   download without login (no Premium audio)
+
+The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
+Edit the file, or delete it to be asked again.
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+  usage >&2
+  exit 1
+fi
+for a in "$@"; do
+  case $a in
+    -h|--help) usage; exit 0 ;;
+    --version) echo "djdojo $version"; exit 0 ;;
+  esac
+done
+
+files() {
+  if [[ $1 == 1 ]]; then echo file; else echo files; fi
+}
+
+# Path with ~ for the home folder, for display only
+pretty() {
+  case $1 in
+    "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# A browser name becomes --cookies-from-browser, so yt-dlp uses your login from there.
+# Bare IDs become full URLs. Video: 11 characters, but not starting with a dash, which an
+# 11-character yt-dlp option like --dump-json does. Playlist: PL own, OL album, RD mix, UU channel
+# uploads, FL/LL/WL/LM favorites, likes, watch later and YouTube Music's "Liked Music".
+# A leading "VL" is YouTube Music's browse ID for the same playlist and is cut off.
+# music.youtube.com rather than www: with cookies yt-dlp then also asks YouTube Music's own
+# client, which is the one that serves Premium's 256k audio. Without cookies it makes no difference.
+args=()
+prev=
+login=  # browser name, "file" or "none". Empty = find a browser that is logged in.
+format_arg=
+for a in "$@"; do
+  if [[ $prev == --cookies-from-browser ]]; then
+    args+=("$a")
+    login=$a
+  elif [[ $a =~ ^(brave|chrome|chromium|edge|firefox|opera|safari|vivaldi|whale)$ ]]; then
+    args+=(--cookies-from-browser "$a")
+    login=$a
+  elif [[ $a == aiff || $a == flac ]]; then
+    format_arg=$a
+  elif [[ $a != -* && $a =~ ^[0-9A-Za-z_-]{11}$ ]]; then
+    args+=("https://music.youtube.com/watch?v=$a")
+  elif [[ $a =~ ^(VL)?((PL|OL|RD|UU|FL|LL|WL|LM)[0-9A-Za-z_-]*)$ ]]; then
+    args+=("https://music.youtube.com/playlist?list=${BASH_REMATCH[2]}")
+  else
+    case $a in
+      --cookies) login="file" ;;
+      --no-cookies-from-browser) login=none ;;
+    esac
+    args+=("$a")
+  fi
+  prev=$a
+done
+
+# Settings: format and folder, chosen the first time djdojo runs in a terminal. The file is the
+# user's own and survives updates of djdojo. Run without a terminal, for example from another
+# script, the defaults are used without asking.
+config=~/.config/djdojo/config
+format=aiff
+dest=~/Music/djdojo
+
+read_config() {
+  local line key value
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line == \#* || $line != *=* ]] && continue
+    key=$(printf '%s' "${line%%=*}" | tr -d '[:space:]')
+    value=${line#*=}
+    value=${value#"${value%%[![:space:]]*}"}
+    value=${value%"${value##*[![:space:]]}"}
+    case $key in
+      format) format=$value ;;
+      folder) dest=${value/#\~/$HOME} ;;
+    esac
+  done < "$config"
+  if [[ $format != aiff && $format != flac ]]; then
+    echo "djdojo: Unknown format \"$format\" in $(pretty "$config"). Write aiff or flac." >&2
+    exit 1
+  fi
+}
+
+setup() {
+  local answer
+  cat >&2 <<EOF
+djdojo: First run. Two questions, the answers are stored in $(pretty "$config") and can be edited there.
+
+Format:
+  1) AIFF - plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute
+  2) FLAC - same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer
+EOF
+  answer=
+  read -r -p "Choose [1]: " answer || true
+  case $answer in
+    2|flac|FLAC) format=flac ;;
+    *) format=aiff ;;
+  esac
+  answer=
+  read -r -p "Folder for playlists [$(pretty "$dest")]: " answer || true
+  if [[ -n $answer ]]; then
+    dest=${answer/#\~/$HOME}
+  fi
+  mkdir -p "$(dirname "$config")"
+  cat > "$config" <<EOF
+# Settings for djdojo. Edit freely, or delete the file to be asked again.
+format=$format
+folder=$(pretty "$dest")
+EOF
+  echo "djdojo: Saved in $(pretty "$config")." >&2
+  echo >&2
+}
+
+if [[ -f $config ]]; then
+  read_config
+elif [[ -t 0 ]]; then
+  setup
+fi
+if [[ -n $format_arg ]]; then
+  format=$format_arg
+fi
+
+# What the format decides. AIFF: --extract-audio cannot make AIFF, hence --recode-video. Opus is
+# 48 kHz, so resample to 44.1 kHz, which even the oldest decks take. Tags as ID3 inside the AIFF,
+# ffmpeg otherwise only writes AIFF's own fields, which have no artist. yt-dlp cannot put the
+# cover into an AIFF, so the .jpg is kept next to it and the script embeds it afterwards.
+# FLAC: yt-dlp does it all itself, and the audio stays at 48 kHz.
+case $format in
+  aiff) format_args=(--recode-video aiff --ppa "VideoConvertor+ffmpeg_o:-ar 44100"
+                     --ppa "Metadata+ffmpeg_o:-write_id3v2 1" --write-thumbnail) ;;
+  flac) format_args=(--extract-audio --audio-format flac --embed-thumbnail) ;;
+esac
+FORMAT=$(printf '%s' "$format" | tr '[:lower:]' '[:upper:]')
+
+# The first browser in the order that is logged in to YouTube. Uses yt-dlp's own cookie reading
+# and the same "logged in" rule as yt-dlp's YouTube code. The Python that has yt-dlp's modules is
+# the one in yt-dlp's own shebang, with Homebrew, pipx and pip alike.
+# Prints the browser name, or one status line per browser and exit 1 if none is logged in.
+find_login() {
+  local python
+  python=$(sed -n '1s/^#! *//p' "$(readlink -f "$(command -v yt-dlp)")")
+  if [[ ! -x $python ]]; then
+    echo "  cannot check the browsers: yt-dlp's Python was not found. Name the browser yourself, for example: djdojo $* firefox"
+    return 1
+  fi
+  "$python" - "$@" <<'PY'
+import sys
+from yt_dlp.cookies import extract_cookies_from_browser
+
+class Logger:
+    def __init__(self):
+        self.errors = []
+    def debug(self, *args, **kwargs):
+        pass
+    info = warning = debug
+    def error(self, message, *args, **kwargs):
+        self.errors.append(message)
+
+AUTH = {'SAPISID', '__Secure-1PAPISID', '__Secure-3PAPISID'}
+report = []
+for browser in sys.argv[1:]:
+    logger = Logger()
+    try:
+        jar = extract_cookies_from_browser(browser, logger=logger)
+    except Exception as error:
+        report.append(f'  {browser}: cannot read cookies ({error})')
+        continue
+    names = {cookie.name for cookie in jar if cookie.domain.endswith('youtube.com')}
+    if 'LOGIN_INFO' in names and names & AUTH:
+        print(browser)
+        sys.exit(0)
+    # Chrome without access to the keychain does not raise, it logs the error and skips the cookies
+    status = f'cannot read cookies ({logger.errors[0]})' if logger.errors else 'not logged in to YouTube'
+    report.append(f'  {browser}: {status}')
+print('\n'.join(report))
+sys.exit(1)
+PY
+}
+
+if [[ -z $login ]]; then
+  if found=$(find_login firefox safari chrome); then
+    login=$found
+    args+=(--cookies-from-browser "$login")
+  else
+    cat >&2 <<EOF
+djdojo: Found no browser that is logged in to YouTube. Without login you do not get the Premium audio (about 256k).
+
+$found
+
+How to fix it:
+  1. "cannot read cookies": macOS blocks the browser's data. Give Terminal Full Disk Access in
+     System Settings > Privacy & Security > Full Disk Access, quit Terminal with Cmd+Q and open
+     it again. Chrome also asks for access to the keychain: choose "Always Allow".
+  2. "not logged in": log in to music.youtube.com in the browser and try again.
+  3. Download without login and without Premium audio: djdojo $* --no-cookies-from-browser
+EOF
+    exit 1
+  fi
+fi
+
+case $login in
+  none) via="without YouTube login" ;;
+  file) via="with cookies from a file" ;;
+  *) via="with the YouTube login from $(printf '%s' "${login:0:1}" | tr '[:lower:]' '[:upper:]')${login:1}" ;;
+esac
+
+# djdojo.conf sits next to the script, also when djdojo is linked into PATH
+conf="$(dirname "$(readlink -f "$0")")/djdojo.conf"
+ytdlp=(yt-dlp --ignore-config --config-locations "$conf" --paths "$dest" "${format_args[@]}")
+
+# Look up before starting: the playlist's name and count, the audio stream yt-dlp picks (256k
+# means the Premium login works) and the folder, computed from djdojo.conf's own template. The
+# first track that can be downloaded is used, so a removed track 1 does not hide the rest. djdojo
+# is for one playlist at a time, so only the first URL is shown and counted.
+echo "djdojo: Looking up on YouTube ..." >&2
+info=$("${ytdlp[@]}" "${args[@]}" --playlist-items 1:5 --max-downloads 1 --no-warnings \
+  --print $'%(playlist_title)s\t%(playlist_count)s\t%(title)s\t%(acodec)s\t%(abr).0f\t%(filename)s' 2>/dev/null) || true
+dir=
+IFS=$'\t' read -r ptitle pcount title acodec abr file <<< "$info" || true
+if [[ -n ${file:-} ]]; then
+  dir=$(dirname "$file")
+  if [[ $ptitle != NA ]]; then
+    echo "djdojo: Downloading the playlist \"$ptitle\" ($pcount tracks) as $FORMAT $via" >&2
+  else
+    echo "djdojo: Downloading \"$title\" as $FORMAT $via" >&2
+  fi
+  if [[ $abr == NA ]]; then
+    echo "djdojo: Audio: $acodec" >&2
+  elif [[ $abr -ge 200 ]]; then
+    echo "djdojo: Audio: $acodec ${abr}k, Premium quality" >&2
+  else
+    echo "djdojo: Audio: $acodec ${abr}k, not Premium quality" >&2
+  fi
+  echo "djdojo: The playlist goes into \"$(pretty "$dir")\"" >&2
+else
+  echo "djdojo: Could not look it up in advance, downloading as $FORMAT $via" >&2
+fi
+
+count_files() {
+  if [[ -z $dir ]]; then
+    echo 0
+    return
+  fi
+  # The folder does not exist before the first file, and find must not stop the script via pipefail
+  (find "$dir" -maxdepth 1 -name "*.$format" 2>/dev/null || true) | wc -l | tr -d ' '
+}
+
+mkdir -p "$dest"
+before=$(count_files)
+
+# stderr is copied to a log file so the failed tracks can be counted afterwards. yt-dlp then sees
+# a pipe instead of the terminal, hence --color, so ERROR still shows in red.
+errlog=$(mktemp -t djdojo)
+trap 'rm -f "$errlog"' EXIT
+status=0
+{ "${ytdlp[@]}" "${args[@]}" --color stderr:always 2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
+
+# Cover in AIFF: put each .jpg into the AIFF of the same name and delete it. yt-dlp also fetches
+# thumbnails for tracks that already exist, so files with a cover are skipped, and files
+# downloaded before cover support get theirs on the next run.
+covers=0
+if [[ $format == aiff ]]; then
+  for jpg in "$dir"/*.jpg; do
+    [[ -n $dir && -f $jpg ]] || continue
+    aiff=${jpg%.jpg}.aiff
+    if [[ -f $aiff && -z $(ffprobe -v error -select_streams v -show_entries stream=index -of csv=p=0 "$aiff") ]]; then
+      if ffmpeg -v error -y -i "$aiff" -i "$jpg" -map 0:a -map 1 -c copy -disposition:v attached_pic \
+          -write_id3v2 1 -f aiff "$aiff.tmp" && mv "$aiff.tmp" "$aiff"; then
+        covers=$((covers + 1))
+      else
+        rm -f "$aiff.tmp"
+      fi
+    fi
+    rm -f "$jpg"
+  done
+fi
+if (( covers > 0 )); then
+  echo "djdojo: Cover added to $covers $(files "$covers")" >&2
+fi
+
+after=$(count_files)
+failed=$(grep -c 'ERROR:' "$errlog" || true)
+summary="djdojo: Done. $((after - before)) .$format $(files $((after - before))) downloaded"
+if (( before > 0 )); then
+  summary+=" ($before were there already)"
+fi
+echo "$summary. ${failed:-0} failed." >&2
+if [[ -n $dir ]]; then
+  echo "djdojo: The playlist is in \"$(pretty "$dir")\"" >&2
+fi
+if (( ${failed:-0} > 0 )); then
+  echo "djdojo: Run the same command again to retry the failed tracks. Tracks that are removed or blocked on YouTube cannot be downloaded." >&2
+fi
+exit "$status"
