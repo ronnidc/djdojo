@@ -3,7 +3,7 @@
 # Usage: djdojo PLAYLIST_URL_OR_ID [...] [aiff|flac] [chrome|safari|firefox|nologin]
 set -euo pipefail
 
-version=1.0.0
+version=1.1.0
 
 # Settings: format and folder, chosen the first time djdojo runs in a terminal (setup, further
 # down), and the login, which the user adds by hand. The file is the user's own and survives
