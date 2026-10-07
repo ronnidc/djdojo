@@ -1,24 +1,64 @@
 #!/usr/bin/env bash
-# djdojo - download a YouTube playlist as AIFF or FLAC for DJ practice.
-# Usage: djdojo PLAYLIST_URL_OR_ID [...] [aiff|flac] [chrome|safari|firefox]
+# djdojo - turn your YouTube playlist into lossless AIFF or FLAC for DJ practice.
+# Usage: djdojo PLAYLIST_URL_OR_ID [...] [aiff|flac] [chrome|safari|firefox|nologin]
 set -euo pipefail
 
 version=1.0.0
 
-usage() {
-  cat <<'EOF'
-Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox ...] [yt-dlp options ...]
+# Settings: format and folder, chosen the first time djdojo runs in a terminal (setup, further
+# down), and the login, which the user adds by hand. The file is the user's own and survives
+# updates of djdojo. Run without a terminal, for example from another script, the defaults are
+# used without asking.
+config=~/.config/djdojo/config
+format=aiff
+dest=~/Music/djdojo
+login_config=  # "no" or a browser name. Empty = search the browsers.
 
-Downloads a YouTube playlist as lossless audio files for DJ practice, the whole playlist in one folder.
+# The browsers yt-dlp can read cookies from, as a word on the command line or in the settings file
+browsers='brave|chrome|chromium|edge|firefox|opera|safari|vivaldi|whale'
+
+# Takes the file as it is. The values are checked where they are used, so --help can show the
+# stored default without failing on a bad value.
+read_config() {
+  local line key value
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line == \#* || $line != *=* ]] && continue
+    key=$(printf '%s' "${line%%=*}" | tr -d '[:space:]')
+    value=${line#*=}
+    value=${value#"${value%%[![:space:]]*}"}
+    value=${value%"${value##*[![:space:]]}"}
+    case $key in
+      format) format=$value ;;
+      folder) dest=${value/#\~/$HOME} ;;
+      login) login_config=$value ;;
+    esac
+  done < "$config"
+}
+
+# The help text marks the stored default format, or aiff before the first run
+usage() {
+  local aiff_default='' flac_default=''
+  if [[ -f $config ]]; then
+    read_config
+  fi
+  case $format in
+    aiff) aiff_default=" (default)" ;;
+    flac) flac_default=" (default)" ;;
+  esac
+  cat <<EOF
+Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [yt-dlp options ...]
+
+Turns your YouTube playlist into lossless audio files for DJ practice, the whole playlist in one folder.
 
   PLAYLIST    playlist link, or just its ID (the part after list=), a single video works too
-  aiff        plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute
-  flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer
+  aiff        plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute$aiff_default
+  flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer$flac_default
   chrome ...  YouTube login from that browser. Without one, Firefox, Safari and Chrome are tried
-  --no-cookies-from-browser   download without login (no Premium audio)
+  nologin     without YouTube login, and without the Premium audio
 
 The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
-Edit the file, or delete it to be asked again.
+Edit the file, or delete it to be asked again. The file can also hold the login: login=no, or a
+browser name such as login=firefox.
 EOF
 }
 
@@ -60,9 +100,12 @@ for a in "$@"; do
   if [[ $prev == --cookies-from-browser ]]; then
     args+=("$a")
     login=$a
-  elif [[ $a =~ ^(brave|chrome|chromium|edge|firefox|opera|safari|vivaldi|whale)$ ]]; then
+  elif [[ $a =~ ^($browsers)$ ]]; then
     args+=(--cookies-from-browser "$a")
     login=$a
+  elif [[ $a == nologin ]]; then  # plain word for --no-cookies-from-browser, which still works
+    args+=(--no-cookies-from-browser)
+    login=none
   elif [[ $a == aiff || $a == flac ]]; then
     format_arg=$a
   elif [[ $a != -* && $a =~ ^[0-9A-Za-z_-]{11}$ ]]; then
@@ -79,32 +122,7 @@ for a in "$@"; do
   prev=$a
 done
 
-# Settings: format and folder, chosen the first time djdojo runs in a terminal. The file is the
-# user's own and survives updates of djdojo. Run without a terminal, for example from another
-# script, the defaults are used without asking.
-config=~/.config/djdojo/config
-format=aiff
-dest=~/Music/djdojo
-
-read_config() {
-  local line key value
-  while IFS= read -r line || [[ -n $line ]]; do
-    [[ $line == \#* || $line != *=* ]] && continue
-    key=$(printf '%s' "${line%%=*}" | tr -d '[:space:]')
-    value=${line#*=}
-    value=${value#"${value%%[![:space:]]*}"}
-    value=${value%"${value##*[![:space:]]}"}
-    case $key in
-      format) format=$value ;;
-      folder) dest=${value/#\~/$HOME} ;;
-    esac
-  done < "$config"
-  if [[ $format != aiff && $format != flac ]]; then
-    echo "djdojo: Unknown format \"$format\" in $(pretty "$config"). Write aiff or flac." >&2
-    exit 1
-  fi
-}
-
+# The first-run questions. The answers go into the settings file, see the top of the script.
 setup() {
   local answer
   cat >&2 <<EOF
@@ -130,6 +148,7 @@ EOF
 # Settings for djdojo. Edit freely, or delete the file to be asked again.
 format=$format
 folder=$(pretty "$dest")
+# login=no downloads without YouTube login, login=firefox always uses that browser
 EOF
   echo "djdojo: Saved in $(pretty "$config")." >&2
   echo >&2
@@ -137,11 +156,29 @@ EOF
 
 if [[ -f $config ]]; then
   read_config
+  if [[ $format != aiff && $format != flac ]]; then
+    echo "djdojo: Unknown format \"$format\" in $(pretty "$config"). Write aiff or flac." >&2
+    exit 1
+  fi
+  if [[ -n $login_config && $login_config != no && ! $login_config =~ ^($browsers)$ ]]; then
+    echo "djdojo: Unknown login \"$login_config\" in $(pretty "$config"). Write no, or a browser name such as firefox." >&2
+    exit 1
+  fi
 elif [[ -t 0 ]]; then
   setup
 fi
 if [[ -n $format_arg ]]; then
   format=$format_arg
+fi
+# The login in the settings file counts when the command line named none
+if [[ -z $login && -n $login_config ]]; then
+  if [[ $login_config == no ]]; then
+    login=none
+    args+=(--no-cookies-from-browser)
+  else
+    login=$login_config
+    args+=(--cookies-from-browser "$login_config")
+  fi
 fi
 
 # What the format decides. AIFF: --extract-audio cannot make AIFF, hence --recode-video. Opus is
@@ -207,7 +244,7 @@ if [[ -z $login ]]; then
     args+=(--cookies-from-browser "$login")
   else
     cat >&2 <<EOF
-djdojo: Found no browser that is logged in to YouTube. Without login you do not get the Premium audio (about 256k).
+djdojo: Found no browser that is logged in to YouTube. Without login there is no Premium audio (about 256k, needs YouTube Premium).
 
 $found
 
@@ -216,9 +253,24 @@ How to fix it:
      System Settings > Privacy & Security > Full Disk Access, quit Terminal with Cmd+Q and open
      it again. Chrome also asks for access to the keychain: choose "Always Allow".
   2. "not logged in": log in to music.youtube.com in the browser and try again.
-  3. Download without login and without Premium audio: djdojo $* --no-cookies-from-browser
 EOF
-    exit 1
+    # In a terminal the third way is a question, with no as the default: files downloaded without
+    # Premium are skipped on the next run, so a wrong yes costs the whole playlist. A script gets
+    # no question and has to say nologin itself.
+    answer=
+    if [[ -t 0 ]]; then
+      echo >&2
+      read -r -p "Download without login and without Premium audio? [y/N] " answer || true
+    else
+      echo "  3. Download without login and without Premium audio: djdojo $* nologin" >&2
+    fi
+    case $answer in
+      y|Y|yes|YES) ;;
+      *) exit 1 ;;
+    esac
+    login=none
+    args+=(--no-cookies-from-browser)
+    echo "djdojo: login=no in $(pretty "$config") skips this question." >&2
   fi
 fi
 

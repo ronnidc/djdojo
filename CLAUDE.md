@@ -59,14 +59,15 @@ only on newer models, FAT32 sticks. One bash script (`djdojo`) and one yt-dlp co
   Python in yt-dlp's own shebang, which is the one that has yt-dlp's modules.
 - `--print` output is pre-postprocessing, so `%(filename)s` ends in `.webm`. Only its directory
   is used.
-- `djdojo` reads `~/.config/djdojo/config` (`format=`, `folder=`), written by its first-run
-  questions. The questions only run when stdin is a tty.
+- `djdojo` reads `~/.config/djdojo/config` (`format=`, `folder=`, `login=`), written by its
+  first-run questions. The questions, and the "download without login?" question, only run when
+  stdin is a tty.
 
 ## Testing
 
 - Tests never read browser cookies: macOS privacy protection blocks the browser folders for a
-  non-interactive shell, and the permission system denies it anyway. Pass
-  `--no-cookies-from-browser` in every test, or `djdojo` starts its login search.
+  non-interactive shell, and the permission system denies it anyway. Pass `nologin` in every
+  test, or `djdojo` starts its login search.
 - Test the login search (`find_login`) with fake data: a scratch copy of `djdojo` where the Python
   line points to a fake script and `yt-dlp` in `PATH` is a stub that prints its arguments.
 - Run `djdojo` with `HOME=<scratch>` to test its config and first-run questions: the config, the

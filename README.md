@@ -1,6 +1,6 @@
 # djdojo
 
-Download a YouTube playlist as lossless audio files for DJ practice. The whole playlist lands in
+Turn your YouTube playlist into lossless audio files for DJ practice. The whole playlist lands in
 one folder, ready for a USB stick and the deck, or for rekordbox, Engine DJ, Serato and Traktor.
 
 ```bash
@@ -38,11 +38,11 @@ is the first step.
 ## Usage
 
 ```bash
-djdojo PLxxxxxxxx                             # playlist ID or full link
-djdojo PLxxxxxxxx flac                        # FLAC instead of the default format, this once
-djdojo PLxxxxxxxx safari                      # login from a specific browser
-djdojo LM                                     # YouTube Music's "Liked Music"
-djdojo PLxxxxxxxx --no-cookies-from-browser   # without login
+djdojo PLxxxxxxxx             # playlist ID or full link
+djdojo PLxxxxxxxx flac        # FLAC instead of the default format, this once
+djdojo PLxxxxxxxx safari      # login from a specific browser
+djdojo LM                     # YouTube Music's "Liked Music"
+djdojo PLxxxxxxxx nologin     # without login, and without the Premium audio
 djdojo --help
 ```
 
@@ -73,8 +73,10 @@ only.
 ### Login
 
 Without a browser name, `djdojo` tries Firefox, Safari and Chrome in that order and uses the first
-one that is logged in to YouTube. If none is, it stops and explains why. A browser name (`chrome`,
-`safari`, `firefox`, `edge`, `brave` and more) skips the search.
+one that is logged in to YouTube. If none is, it explains why and asks whether to download without
+login. A browser name (`chrome`, `safari`, `firefox`, `edge`, `brave` and more) skips the search,
+and `nologin` skips the login altogether. Either can be made permanent with a line in
+`~/.config/djdojo/config`: `login=firefox` or `login=no`.
 
 Login gives access to private playlists. The audio only gets better with YouTube Premium: then
 there is a higher-quality stream, about 256k, which `djdojo` picks by itself and shows in the

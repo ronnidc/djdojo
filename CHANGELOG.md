@@ -4,6 +4,16 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- `nologin` on the command line downloads without a YouTube login. yt-dlp's own `--no-cookies-from-browser` still works.
+- `login=no` or `login=<browser>` in `~/.config/djdojo/config` makes that the default, like `format` does.
+- `--help` marks the format that is the default, the one stored in `~/.config/djdojo/config`.
+
+### Changed
+
+- When no browser is logged in to YouTube, `djdojo` asks whether to download without login instead of only explaining how. From a script, without a terminal, it still stops.
+
 ## [1.0.0] - 2026-10-07
 
 ### Added
