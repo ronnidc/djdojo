@@ -3,11 +3,11 @@
 Turn your YouTube playlist into lossless audio files for DJ practice. The whole playlist lands in
 one folder, ready for a USB stick and the deck, or for rekordbox, Engine DJ, Serato and Traktor.
 
-```bash
-djdojo PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c
-```
+Here is a run with a playlist by [NoCopyrightSounds](https://ncs.io), a label that releases its
+music for free use by creators. One command, and `djdojo` reports what it does:
 
-```
+```console
+$ djdojo PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c
 djdojo: Downloading the playlist "NCS - Instrumental Future House" (20 tracks) as AIFF with the YouTube login from Firefox
 djdojo: Audio: opus 263k, Premium quality
 djdojo: The playlist goes into "~/Music/djdojo/NCS - Instrumental Future House"
@@ -15,9 +15,6 @@ djdojo: The playlist goes into "~/Music/djdojo/NCS - Instrumental Future House"
 djdojo: Done. 20 .aiff files downloaded. 0 failed.
 djdojo: The playlist is in "~/Music/djdojo/NCS - Instrumental Future House"
 ```
-
-The example is a playlist by [NoCopyrightSounds](https://ncs.io), a label that releases its music
-for free use by creators.
 
 Every file is decoded once from YouTube's best audio stream and stored lossless with title, artist,
 album, track number and cover. MP3 would add another lossy step, and VBR MP3 can give imprecise cue
