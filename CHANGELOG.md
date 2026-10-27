@@ -4,6 +4,10 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- The README and `--help` say what `djdojo` is for: private practice with music you have the right to download, and buying the music for a gig or any other public or professional use.
+
 ## [1.1.0] - 2026-10-07
 
 ### Added

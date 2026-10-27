@@ -49,6 +49,7 @@ usage() {
 Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [yt-dlp options ...]
 
 Turns your YouTube playlist into lossless audio files for DJ practice, the whole playlist in one folder.
+For private practice with music you have the right to download. For public or professional use, buy the music.
 
   PLAYLIST    playlist link, or just its ID (the part after list=), a single video works too
   aiff        plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute$aiff_default

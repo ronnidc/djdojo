@@ -1,7 +1,8 @@
 # djdojo
 
-Turn your YouTube playlist into lossless audio files for DJ practice. The whole playlist lands in
-one folder, ready for a USB stick and the deck, or for rekordbox, Engine DJ, Serato and Traktor.
+Turn your YouTube playlist into lossless audio files for DJ practice. It is for private practice
+with music you have the right to download. The whole playlist lands in one folder, ready for a USB
+stick and the deck, or for rekordbox, Engine DJ, Serato and Traktor.
 
 Here is a run with a playlist by [NoCopyrightSounds](https://ncs.io), a label that releases its
 music for free use by creators:
@@ -22,8 +23,13 @@ djdojo PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c
 
 Every file is decoded once from YouTube's best audio stream and stored lossless with title, artist,
 album, track number and cover. MP3 would add another lossy step, and VBR MP3 can give imprecise cue
-points on older CDJs. The audio cannot get better than YouTube's source. For a real gig, purchased
-WAV, AIFF or FLAC from Beatport, Bandcamp and the like are still better.
+points on older CDJs. The audio cannot get better than YouTube's source.
+
+djdojo is for practice at home with music you have the right to download: your own uploads, tracks
+released for free use such as the NoCopyrightSounds catalogue, or music you have bought. You are
+responsible for complying with YouTube's Terms of Service and with copyright law where you live. For
+a gig, a stream or any other public or professional use, buy the music. WAV, AIFF or FLAC from
+Beatport, Bandcamp and the like sound better, and the people who made it get paid.
 
 ## Installation
 
