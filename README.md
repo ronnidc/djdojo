@@ -122,6 +122,8 @@ file in the folder yourself.
 - **Serato, Traktor** and other DJ software read the folder straight from disk.
 - If the tracks are already in rekordbox and the cover is missing, reload the tags (right-click
   the track).
+- **Finder** shows the cover of an AIFF but not of a FLAC, because macOS only reads the tags in a
+  FLAC. The cover is in the file all the same.
 
 ## When something fails
 

@@ -97,6 +97,10 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   braces: double quotes make Tcl treat `[1]` as a command.
 - Real test downloads go to the session scratchpad with `--paths <scratch>` and
   `--playlist-items 1`. Path checks without downloading use `--print filename`.
+- Covers: `qlmanage -t -s 200 -o <scratch> <file>` renders the Quick Look thumbnail as a PNG,
+  which shows an AIFF's cover. Quick Look never shows a FLAC's cover, whoever embedded it, so a
+  FLAC is checked with mutagen through the Python in yt-dlp's shebang
+  (`mutagen.flac.FLAC(path).pictures`). A glob over `Cellar/yt-dlp/*` can match two versions.
 - A source format the sites rarely give (an original 24 bit/48 kHz AIFF, a WAV) is tested with a
   file made by ffmpeg in the scratchpad and passed as `file://<path>` with `--enable-file-urls`.
 - Public test material: video `EIlaJ6VdbqM` (YouTube Music track with artist/album tags),
