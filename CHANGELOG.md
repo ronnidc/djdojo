@@ -6,7 +6,7 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ### Added
 
-- SoundCloud links: a playlist or album, a profile's tracks or likes, or a single track (#1). Logged in, `djdojo` gets the uploader's original file, often a WAV, for tracks whose uploader has enabled downloads, and the 256k stream with SoundCloud Go+.
+- SoundCloud links: a playlist or album, a profile's tracks or likes, or a single track (#1). Logged in, `djdojo` gets the uploader's original file, often a WAV, for tracks whose uploader has enabled downloads, and the 256k stream with SoundCloud Go+. An AIFF is 16 bit/44.1 kHz also when the original is not.
 - For a SoundCloud link the login search looks for a SoundCloud login, and the messages name SoundCloud instead of YouTube.
 - SoundCloud's genre goes into the genre tag.
 

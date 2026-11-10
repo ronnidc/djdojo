@@ -219,14 +219,17 @@ if [[ -z $login && -n $login_config ]]; then
   fi
 fi
 
-# What the format decides. AIFF: --extract-audio cannot make AIFF, hence --recode-video. Opus is
-# 48 kHz, so resample to 44.1 kHz, which even the oldest decks take. Tags as ID3 inside the AIFF,
-# ffmpeg otherwise only writes AIFF's own fields, which have no artist. FLAC keeps the source's
-# sample rate. Both keep the cover as a .jpg next to the file, and the script embeds it afterwards:
-# yt-dlp cannot put a cover into an AIFF, and cannot scale one down for a FLAC.
+# What the format decides. AIFF: --extract-audio cannot make AIFF, hence --recode-video. Every
+# AIFF becomes 16 bit/44.1 kHz, which even the oldest decks take. The conversion resamples straight
+# from the decoder, since Opus is 48 kHz. --recode-video skips a file that already is AIFF, such as
+# a SoundCloud original in 24 bit/48 kHz, so the metadata step, which runs on every file, converts
+# once more. Audio that already is 16 bit/44.1 kHz passes it bit-exact. Tags as ID3 inside the AIFF,
+# ffmpeg otherwise only writes AIFF's own fields, which have no artist. FLAC keeps the source as it
+# is. Both keep the cover as a .jpg next to the file, and the script embeds it afterwards: yt-dlp
+# cannot put a cover into an AIFF, and cannot scale one down for a FLAC.
 case $format in
   aiff) format_args=(--recode-video aiff --ppa "VideoConvertor+ffmpeg_o:-ar 44100"
-                     --ppa "Metadata+ffmpeg_o:-write_id3v2 1" --write-thumbnail) ;;
+                     --ppa "Metadata+ffmpeg_o:-write_id3v2 1 -c:a pcm_s16be -ar 44100" --write-thumbnail) ;;
   flac) format_args=(--extract-audio --audio-format flac --write-thumbnail) ;;
 esac
 FORMAT=$(upper "$format")

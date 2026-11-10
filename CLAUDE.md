@@ -52,8 +52,11 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   thumbnails again for files that already exist, which is how older files get their cover on a
   rerun. `--output "pl_thumbnail:"` stops the playlist's own thumbnail from being written.
 - `--convert-thumbnails jpg` and `--recode-video aiff` skip a file that already has the target
-  format, so the crop in `djdojo.conf` never runs on a .jpg thumbnail, and an original SoundCloud
-  file that is already .aiff is not resampled to 44.1 kHz.
+  format, so the crop in `djdojo.conf` never runs on a .jpg thumbnail. For AIFF the metadata step,
+  which runs on every file, repeats the 16 bit/44.1 kHz conversion (`-c:a pcm_s16be -ar 44100`) to
+  catch an original .aiff from SoundCloud. yt-dlp puts `--ppa` output options after the step's own
+  `-c copy`, and ffmpeg takes the last match per stream, so only the audio is encoded. The
+  conversion step keeps its own `-ar 44100`, so YouTube audio is resampled once, from the decoder.
 - yt-dlp re-runs the metadata postprocessor on files that already exist, so a rerun rewrites them.
   Covers survive it.
 - ffmpeg output options in `--ppa` use the `NAME+ffmpeg_o:` form.
@@ -94,6 +97,8 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   braces: double quotes make Tcl treat `[1]` as a command.
 - Real test downloads go to the session scratchpad with `--paths <scratch>` and
   `--playlist-items 1`. Path checks without downloading use `--print filename`.
+- A source format the sites rarely give (an original 24 bit/48 kHz AIFF, a WAV) is tested with a
+  file made by ffmpeg in the scratchpad and passed as `file://<path>` with `--enable-file-urls`.
 - Public test material: video `EIlaJ6VdbqM` (YouTube Music track with artist/album tags),
   playlist `UU97SO7kenN4qKp-_6u6FSLQ` (a channel's uploads) and the README example
   `PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c` (NoCopyrightSounds, 20 tracks, no artist/album tags, so
