@@ -4,6 +4,22 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- SoundCloud links: a playlist or album, a profile's tracks or likes, or a single track (#1). Logged in, `djdojo` gets the uploader's original file, often a WAV, for tracks whose uploader has enabled downloads, and the 256k stream with SoundCloud Go+.
+- For a SoundCloud link the login search looks for a SoundCloud login, and the messages name SoundCloud instead of YouTube.
+- SoundCloud's genre goes into the genre tag.
+
+### Changed
+
+- Covers wider than 1000 px are scaled down. SoundCloud's original artwork is up to 3000x3000 and added several MB to every file.
+- `djdojo` embeds the FLAC cover itself, as it already did for AIFF, so FLAC files without a cover get one on the next run. Covers are marked as front cover in both formats.
+- The "Audio" line says aac instead of mp4a.40.2.
+
+### Fixed
+
+- When yt-dlp's Python is not found, the hint to name a browser now shows the command that was run instead of the list of browsers.
+
 ## [1.1.1] - 2026-10-27
 
 ### Changed

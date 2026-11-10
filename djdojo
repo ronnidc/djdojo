@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# djdojo - turn your YouTube playlist into lossless AIFF or FLAC for DJ practice.
+# djdojo - turn your YouTube or SoundCloud playlist into lossless AIFF or FLAC for DJ practice.
 # Usage: djdojo PLAYLIST_URL_OR_ID [...] [aiff|flac] [chrome|safari|firefox|nologin]
 set -euo pipefail
 
@@ -48,14 +48,14 @@ usage() {
   cat <<EOF
 Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [yt-dlp options ...]
 
-Turns your YouTube playlist into lossless audio files for DJ practice, the whole playlist in one folder.
+Turns your YouTube or SoundCloud playlist into lossless audio files for DJ practice, the whole playlist in one folder.
 For private practice with music you have the right to download. For public or professional use, buy the music.
 
-  PLAYLIST    playlist link, or just its ID (the part after list=), a single video works too
+  PLAYLIST    YouTube playlist link or just its ID (the part after list=), or SoundCloud link, a single track works too
   aiff        plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute$aiff_default
   flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer$flac_default
-  chrome ...  YouTube login from that browser. Without one, Firefox, Safari and Chrome are tried
-  nologin     without YouTube login, and without the Premium audio
+  chrome ...  YouTube or SoundCloud login from that browser. Without one, Firefox, Safari and Chrome are tried
+  nologin     without login, so without YouTube's Premium audio and SoundCloud's original files
 
 The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
 Edit the file, or delete it to be asked again. The file can also hold the login: login=no, or a
@@ -74,8 +74,15 @@ for a in "$@"; do
   esac
 done
 
+# The command as it was typed, for the hints that suggest running it again with one word more
+rerun="djdojo $*"
+
 files() {
   if [[ $1 == 1 ]]; then echo file; else echo files; fi
+}
+
+upper() {
+  printf '%s' "$1" | tr '[:lower:]' '[:upper:]'
 }
 
 # Path with ~ for the home folder, for display only
@@ -122,6 +129,36 @@ for a in "$@"; do
   fi
   prev=$a
 done
+
+# The first link's site decides the login search and the wording, since djdojo is for one
+# playlist per run. Bare IDs are YouTube's, and SoundCloud's app shares on.soundcloud.com links.
+site=youtube
+for a in ${args[@]+"${args[@]}"}; do
+  if [[ $a =~ ^(https?://)?([0-9a-z-]+\.)?soundcloud\.com/ ]]; then
+    site=soundcloud
+    break
+  elif [[ $a == *://* ]]; then
+    break
+  fi
+done
+# What a login adds. SoundCloud hands the uploader's own file, often a WAV, only to logged-in users,
+# and only for tracks whose uploader has enabled downloads.
+case $site in
+  youtube)
+    site_name=YouTube
+    site_url=music.youtube.com
+    extras="Premium audio"
+    extras_long="there is no Premium audio (about 256k, needs YouTube Premium)"
+    premium=Premium
+    ;;
+  soundcloud)
+    site_name=SoundCloud
+    site_url=soundcloud.com
+    extras="original files and Go+ audio"
+    extras_long="there are no original files, which uploaders can offer for download, and no Go+ audio (256k, needs SoundCloud Go+)"
+    premium=Go+
+    ;;
+esac
 
 # The first-run questions. The answers go into the settings file, see the top of the script.
 setup() {
@@ -184,25 +221,26 @@ fi
 
 # What the format decides. AIFF: --extract-audio cannot make AIFF, hence --recode-video. Opus is
 # 48 kHz, so resample to 44.1 kHz, which even the oldest decks take. Tags as ID3 inside the AIFF,
-# ffmpeg otherwise only writes AIFF's own fields, which have no artist. yt-dlp cannot put the
-# cover into an AIFF, so the .jpg is kept next to it and the script embeds it afterwards.
-# FLAC: yt-dlp does it all itself, and the audio stays at 48 kHz.
+# ffmpeg otherwise only writes AIFF's own fields, which have no artist. FLAC keeps the source's
+# sample rate. Both keep the cover as a .jpg next to the file, and the script embeds it afterwards:
+# yt-dlp cannot put a cover into an AIFF, and cannot scale one down for a FLAC.
 case $format in
   aiff) format_args=(--recode-video aiff --ppa "VideoConvertor+ffmpeg_o:-ar 44100"
                      --ppa "Metadata+ffmpeg_o:-write_id3v2 1" --write-thumbnail) ;;
-  flac) format_args=(--extract-audio --audio-format flac --embed-thumbnail) ;;
+  flac) format_args=(--extract-audio --audio-format flac --write-thumbnail) ;;
 esac
-FORMAT=$(printf '%s' "$format" | tr '[:lower:]' '[:upper:]')
+FORMAT=$(upper "$format")
 
-# The first browser in the order that is logged in to YouTube. Uses yt-dlp's own cookie reading
-# and the same "logged in" rule as yt-dlp's YouTube code. The Python that has yt-dlp's modules is
-# the one in yt-dlp's own shebang, with Homebrew, pipx and pip alike.
+# The first browser in the order that is logged in to the site. Uses yt-dlp's own cookie reading
+# and the same "logged in" rule as yt-dlp's code for the site. The Python that has yt-dlp's modules
+# is the one in yt-dlp's own shebang, with Homebrew, pipx and pip alike.
+# Usage: find_login SITE BROWSER ...
 # Prints the browser name, or one status line per browser and exit 1 if none is logged in.
 find_login() {
   local python
   python=$(sed -n '1s/^#! *//p' "$(readlink -f "$(command -v yt-dlp)")")
   if [[ ! -x $python ]]; then
-    echo "  cannot check the browsers: yt-dlp's Python was not found. Name the browser yourself, for example: djdojo $* firefox"
+    echo "  cannot check the browsers: yt-dlp's Python was not found. Name the browser yourself, for example: $rerun firefox"
     return 1
   fi
   "$python" - "$@" <<'PY'
@@ -218,21 +256,28 @@ class Logger:
     def error(self, message, *args, **kwargs):
         self.errors.append(message)
 
+# YouTube: LOGIN_INFO plus one of the SAPISID cookies. SoundCloud: the oauth_token cookie, which
+# yt-dlp sends as the OAuth header.
 AUTH = {'SAPISID', '__Secure-1PAPISID', '__Secure-3PAPISID'}
+SITES = {
+    'youtube': ('YouTube', 'youtube.com', lambda names: 'LOGIN_INFO' in names and bool(names & AUTH)),
+    'soundcloud': ('SoundCloud', 'soundcloud.com', lambda names: 'oauth_token' in names),
+}
+label, domain, logged_in = SITES[sys.argv[1]]
 report = []
-for browser in sys.argv[1:]:
+for browser in sys.argv[2:]:
     logger = Logger()
     try:
         jar = extract_cookies_from_browser(browser, logger=logger)
     except Exception as error:
         report.append(f'  {browser}: cannot read cookies ({error})')
         continue
-    names = {cookie.name for cookie in jar if cookie.domain.endswith('youtube.com')}
-    if 'LOGIN_INFO' in names and names & AUTH:
+    names = {cookie.name for cookie in jar if cookie.domain.endswith(domain)}
+    if logged_in(names):
         print(browser)
         sys.exit(0)
     # Chrome without access to the keychain does not raise, it logs the error and skips the cookies
-    status = f'cannot read cookies ({logger.errors[0]})' if logger.errors else 'not logged in to YouTube'
+    status = f'cannot read cookies ({logger.errors[0]})' if logger.errors else f'not logged in to {label}'
     report.append(f'  {browser}: {status}')
 print('\n'.join(report))
 sys.exit(1)
@@ -240,12 +285,12 @@ PY
 }
 
 if [[ -z $login ]]; then
-  if found=$(find_login firefox safari chrome); then
+  if found=$(find_login "$site" firefox safari chrome); then
     login=$found
     args+=(--cookies-from-browser "$login")
   else
     cat >&2 <<EOF
-djdojo: Found no browser that is logged in to YouTube. Without login there is no Premium audio (about 256k, needs YouTube Premium).
+djdojo: Found no browser that is logged in to $site_name. Without login $extras_long.
 
 $found
 
@@ -253,17 +298,17 @@ How to fix it:
   1. "cannot read cookies": macOS blocks the browser's data. Give Terminal Full Disk Access in
      System Settings > Privacy & Security > Full Disk Access, quit Terminal with Cmd+Q and open
      it again. Chrome also asks for access to the keychain: choose "Always Allow".
-  2. "not logged in": log in to music.youtube.com in the browser and try again.
+  2. "not logged in": log in to $site_url in the browser and try again.
 EOF
     # In a terminal the third way is a question, with no as the default: files downloaded without
-    # Premium are skipped on the next run, so a wrong yes costs the whole playlist. A script gets
-    # no question and has to say nologin itself.
+    # login are skipped on the next run, so a wrong yes costs the better audio for the whole
+    # playlist. A script gets no question and has to say nologin itself.
     answer=
     if [[ -t 0 ]]; then
       echo >&2
-      read -r -p "Download without login and without Premium audio? [y/N] " answer || true
+      read -r -p "Download without login and without $extras? [y/N] " answer || true
     else
-      echo "  3. Download without login and without Premium audio: djdojo $* nologin" >&2
+      echo "  3. Download without login and without $extras: $rerun nologin" >&2
     fi
     case $answer in
       y|Y|yes|YES) ;;
@@ -276,9 +321,9 @@ EOF
 fi
 
 case $login in
-  none) via="without YouTube login" ;;
+  none) via="without $site_name login" ;;
   file) via="with cookies from a file" ;;
-  *) via="with the YouTube login from $(printf '%s' "${login:0:1}" | tr '[:lower:]' '[:upper:]')${login:1}" ;;
+  *) via="with the $site_name login from $(upper "${login:0:1}")${login:1}" ;;
 esac
 
 # djdojo.conf sits next to the script, also when djdojo is linked into PATH
@@ -286,14 +331,14 @@ conf="$(dirname "$(readlink -f "$0")")/djdojo.conf"
 ytdlp=(yt-dlp --ignore-config --config-locations "$conf" --paths "$dest" "${format_args[@]}")
 
 # Look up before starting: the playlist's name and count, the audio stream yt-dlp picks (256k
-# means the Premium login works) and the folder, computed from djdojo.conf's own template. The
-# first track that can be downloaded is used, so a removed track 1 does not hide the rest. djdojo
-# is for one playlist at a time, so only the first URL is shown and counted.
-echo "djdojo: Looking up on YouTube ..." >&2
+# means the Premium or Go+ login works) and the folder, computed from djdojo.conf's own template.
+# The first track that can be downloaded is used, so a removed track 1 does not hide the rest.
+# djdojo is for one playlist at a time, so only the first URL is shown and counted.
+echo "djdojo: Looking up on $site_name ..." >&2
 info=$("${ytdlp[@]}" "${args[@]}" --playlist-items 1:5 --max-downloads 1 --no-warnings \
-  --print $'%(playlist_title)s\t%(playlist_count)s\t%(title)s\t%(acodec)s\t%(abr).0f\t%(filename)s' 2>/dev/null) || true
+  --print $'%(playlist_title)s\t%(playlist_count)s\t%(title)s\t%(acodec)s\t%(abr).0f\t%(format_id)s\t%(ext)s\t%(filename)s' 2>/dev/null) || true
 dir=
-IFS=$'\t' read -r ptitle pcount title acodec abr file <<< "$info" || true
+IFS=$'\t' read -r ptitle pcount title acodec abr format_id ext file <<< "$info" || true
 if [[ -n ${file:-} ]]; then
   dir=$(dirname "$file")
   if [[ $ptitle != NA ]]; then
@@ -301,12 +346,18 @@ if [[ -n ${file:-} ]]; then
   else
     echo "djdojo: Downloading \"$title\" as $FORMAT $via" >&2
   fi
-  if [[ $abr == NA ]]; then
+  case $acodec in
+    mp4a*) acodec=aac ;;
+  esac
+  # "download" is yt-dlp's name for the file a SoundCloud uploader offers for download
+  if [[ $format_id == download ]]; then
+    echo "djdojo: Audio: the uploader's original file ($(upper "$ext"))" >&2
+  elif [[ $abr == NA ]]; then
     echo "djdojo: Audio: $acodec" >&2
   elif [[ $abr -ge 200 ]]; then
-    echo "djdojo: Audio: $acodec ${abr}k, Premium quality" >&2
+    echo "djdojo: Audio: $acodec ${abr}k, $premium quality" >&2
   else
-    echo "djdojo: Audio: $acodec ${abr}k, not Premium quality" >&2
+    echo "djdojo: Audio: $acodec ${abr}k, not $premium quality" >&2
   fi
   echo "djdojo: The playlist goes into \"$(pretty "$dir")\"" >&2
 else
@@ -332,25 +383,37 @@ trap 'rm -f "$errlog"' EXIT
 status=0
 { "${ytdlp[@]}" "${args[@]}" --color stderr:always 2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
 
-# Cover in AIFF: put each .jpg into the AIFF of the same name and delete it. yt-dlp also fetches
+# Covers: put each .jpg into the file of the same name and delete it. yt-dlp also fetches
 # thumbnails for tracks that already exist, so files with a cover are skipped, and files
-# downloaded before cover support get theirs on the next run.
+# downloaded before cover support get theirs on the next run. SoundCloud's original artwork is up
+# to 3000x3000 and several MB in every file, so covers wider than 1000 px are scaled down.
+# YouTube's end up at 720x720 and are copied as they are. ffmpeg marks a picture as "Other"
+# unless its comment names the type.
 covers=0
+mux_args=(-f "$format")
 if [[ $format == aiff ]]; then
-  for jpg in "$dir"/*.jpg; do
-    [[ -n $dir && -f $jpg ]] || continue
-    aiff=${jpg%.jpg}.aiff
-    if [[ -f $aiff && -z $(ffprobe -v error -select_streams v -show_entries stream=index -of csv=p=0 "$aiff") ]]; then
-      if ffmpeg -v error -y -i "$aiff" -i "$jpg" -map 0:a -map 1 -c copy -disposition:v attached_pic \
-          -write_id3v2 1 -f aiff "$aiff.tmp" && mv "$aiff.tmp" "$aiff"; then
-        covers=$((covers + 1))
-      else
-        rm -f "$aiff.tmp"
-      fi
-    fi
-    rm -f "$jpg"
-  done
+  mux_args+=(-write_id3v2 1)
 fi
+for jpg in "$dir"/*.jpg; do
+  [[ -n $dir && -f $jpg ]] || continue
+  audio=${jpg%.jpg}.$format
+  if [[ -f $audio && -z $(ffprobe -v error -select_streams v -show_entries stream=index -of csv=p=0 "$audio") ]]; then
+    width=$(ffprobe -v error -select_streams v -show_entries stream=width -of csv=p=0 "$jpg")
+    if [[ $width =~ ^[0-9]+$ ]] && (( width > 1000 )); then
+      cover_args=(-c:v mjpeg -q:v 2 -vf scale=1000:-2)
+    else
+      cover_args=(-c:v copy)
+    fi
+    if ffmpeg -v error -y -i "$audio" -i "$jpg" -map 0:a -map 1 -c:a copy "${cover_args[@]}" \
+        -disposition:v attached_pic -metadata:s:v comment="Cover (front)" "${mux_args[@]}" "$audio.tmp" \
+        && mv "$audio.tmp" "$audio"; then
+      covers=$((covers + 1))
+    else
+      rm -f "$audio.tmp"
+    fi
+  fi
+  rm -f "$jpg"
+done
 if (( covers > 0 )); then
   echo "djdojo: Cover added to $covers $(files "$covers")" >&2
 fi
