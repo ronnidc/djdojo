@@ -4,6 +4,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-10
+
 ### Added
 
 - SoundCloud links: a playlist or album, a profile's tracks or likes, or a single track (#1). Logged in, `djdojo` gets the uploader's original file, often a WAV, for tracks whose uploader has enabled downloads, and the 256k stream with SoundCloud Go+. An AIFF is 16 bit/44.1 kHz also when the original is not.
@@ -48,7 +50,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ronnidc/djdojo/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/ronnidc/djdojo/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ronnidc/djdojo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ronnidc/djdojo/releases/tag/v1.0.0
