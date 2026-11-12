@@ -4,6 +4,25 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- A browser with several logged-in profiles, for example a private and a school profile in Chrome: `djdojo` looks up the first track with each and uses the first one that gets Premium audio, or Go+ audio or the uploader's original file on SoundCloud. The line about the download names the profile. When none does and the playlist needs a login, it asks which one to use.
+- One profile of a browser can be named: `"chrome:Profile 1"` on the command line, or `login=chrome:Profile 1` in `~/.config/djdojo/config`.
+- Tracks that YouTube only offers as a video are listed at the end, since their audio is the video's 128k AAC. Deleting them and running the same command again tries for the usual audio.
+- In a terminal `djdojo`'s own lines start with the name and a mark in the color of their kind: `→` doing, `•` information, `✓` went well, `!` needs attention, `✗` failed. The last three are colored all the way, green, yellow and red. `NO_COLOR` turns the colors off, and output that is piped or saved stays plain `djdojo: text`.
+
+### Changed
+
+- When no login gets Premium audio for the first track, a YouTube playlist that can be opened without login is downloaded without it, and `djdojo` says so at the start and at the end. Naming the browser, on the command line or as `login=` in the config, keeps the login.
+- A browser named without a profile has its profiles looked through in the same way. Before, yt-dlp took the profile that was used last, which with two browser windows open could be either.
+- yt-dlp's errors are only colored in a terminal, so saved output is free of color codes.
+- When YouTube or SoundCloud refuses tracks with `HTTP Error 403`, `djdojo` says so at the end and shows the command that downloads without login, instead of only suggesting the same command again.
+
+### Fixed
+
+- The summary no longer shows a negative number of downloaded files when files are removed from the folder during the run.
+- The hint about removed or blocked tracks names SoundCloud for a SoundCloud link.
+
 ## [1.2.0] - 2026-11-10
 
 ### Added

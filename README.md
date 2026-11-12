@@ -13,13 +13,19 @@ djdojo PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c
 
 ```bash
 # djdojo output:
-# djdojo: Downloading the playlist "NCS - Instrumental Future House" (20 tracks) as AIFF with the YouTube login from Firefox
-# djdojo: Audio: opus 263k, Premium quality
-# djdojo: The playlist goes into "~/Music/djdojo/NCS - Instrumental Future House"
+# djdojo → Downloading the playlist "NCS - Instrumental Future House" (20 tracks) as AIFF with the YouTube login from Firefox
+# djdojo ✓ Audio: opus 263k, Premium quality
+# djdojo • The playlist goes into "~/Music/djdojo/NCS - Instrumental Future House"
 # ...
-# djdojo: Done. 20 .aiff files downloaded. 0 failed.
-# djdojo: The playlist is in "~/Music/djdojo/NCS - Instrumental Future House"
+# djdojo ✓ Done. 20 .aiff files downloaded. 0 failed.
+# djdojo • The playlist is in "~/Music/djdojo/NCS - Instrumental Future House"
 ```
+
+The name and the mark are colored and tell the lines apart at a glance, between the many lines
+from yt-dlp: `→` for what `djdojo` is doing, `•` for information, `✓` for what went well, `!` for
+what needs your attention and `✗` for what failed. The last three are colored all the way: green,
+yellow and red. `NO_COLOR=1` turns the colors off. Output that is piped or saved to a file is plain
+text, every line starting with `djdojo:`.
 
 Every file is decoded once from the best audio stream and stored lossless with title, artist,
 album, track number and cover. MP3 would add another lossy step, and VBR MP3 can give imprecise cue
@@ -85,14 +91,28 @@ only.
 Without a browser name, `djdojo` tries Firefox, Safari and Chrome in that order and uses the first
 one that is logged in to YouTube, or to SoundCloud for a SoundCloud link. If none is, it explains
 why and asks whether to download without login. A browser name (`chrome`, `safari`, `firefox`,
-`edge`, `brave` and more) skips the search, and `nologin` skips the login altogether. Either can be
-made permanent with a line in `~/.config/djdojo/config`: `login=firefox` or `login=no`.
+`edge`, `brave` and more) limits it to that browser, and `nologin` skips the login altogether.
+Either can be made permanent with a line in `~/.config/djdojo/config`: `login=firefox` or
+`login=no`.
 
 On YouTube, login gives access to private playlists. The audio only gets better with YouTube
 Premium: then there is a higher-quality stream, about 256k, which `djdojo` picks by itself and
 shows in the "Audio" line. The line is for the first track, and a track that has no Premium stream
 gets the best one it has. `djdojo` uses your login only towards YouTube and SoundCloud. Cookies
 are not sent anywhere else.
+
+A browser can hold several profiles, each with its own login, for example a private one and one
+for school. `djdojo` looks through all of them. When more than one is logged in, it looks up the
+first track with each and uses the first one that gets Premium audio, and the line about the
+download names the profile. To settle it yourself, put the profile's folder after the browser
+name: `djdojo PLxxxxxxxx "chrome:Profile 1"`, or `login=chrome:Profile 1` in the config. Chrome
+shows the folder as the last part of "Profile Path" on the page `chrome://version`.
+
+When no login gets Premium audio for the first track, `djdojo` downloads the YouTube playlist
+without login, if it can be opened that way, and says so at the start and at the end. The audio is
+the same, and logged-in downloads are the ones YouTube refuses first. To use the login anyway, name
+the browser: `djdojo PLxxxxxxxx chrome`, or `login=chrome` in the config. A playlist that needs a
+login keeps it, and with several logins that can open it, `djdojo` asks which one to use.
 
 macOS blocks other programs from reading browser data, so Terminal needs **Full Disk Access**:
 System Settings > Privacy & Security > Full Disk Access, add Terminal, quit Terminal with Cmd+Q and
@@ -134,11 +154,17 @@ file in the folder yourself.
 | `not logged in to SoundCloud`             | Log in to soundcloud.com in the browser                          |
 | `Video unavailable`                       | The track is removed or blocked on YouTube, cannot be downloaded |
 | `Requested format is not available`       | YouTube changed something, run `brew upgrade`                    |
+| `HTTP Error 403: Forbidden`               | YouTube refused the track, run `brew upgrade` or add `nologin`   |
 | `YouTube Music is not directly supported` | Only a warning, everything works                                 |
 | `only available for registered users`     | SoundCloud without login, the stream is used instead             |
 
 Failed tracks are counted at the end. Run the same command again to retry them, the downloaded
-ones are skipped.
+ones are skipped. When YouTube refuses tracks with `HTTP Error 403`, `djdojo` says so and shows the
+command that downloads without login. Without YouTube Premium the audio is the same either way.
+
+Now and then YouTube offers a track only as a video. It is downloaded all the same, with the
+video's sound, which is 128k AAC, about half of Premium audio. `djdojo` lists those tracks at the
+end. Delete them and run the same command again to try for the usual audio.
 
 ## Terms
 

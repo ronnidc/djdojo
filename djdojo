@@ -58,8 +58,8 @@ For private practice with music you have the right to download. For public or pr
   nologin     without login, so without YouTube's Premium audio and SoundCloud's original files
 
 The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
-Edit the file, or delete it to be asked again. The file can also hold the login: login=no, or a
-browser name such as login=firefox.
+Edit the file, or delete it to be asked again. The file can also hold the login: login=no, a
+browser name such as login=firefox, or one profile of a browser such as login=chrome:Profile 1.
 EOF
 }
 
@@ -93,7 +93,48 @@ pretty() {
   esac
 }
 
-# A browser name becomes --cookies-from-browser, so yt-dlp uses your login from there.
+# How djdojo's own lines look. In a terminal each starts with the name and a mark for its kind, in
+# bold and in the kind's color, so they stand out between yt-dlp's many lines:
+#   → doing something   • information   ✓ went well   ! needs attention   ✗ failed
+# What went well, needs attention or failed is colored all the way, and what djdojo is doing is
+# bold, so the outcome can be read off the colors alone. Information keeps the terminal's own
+# color, which every theme makes readable.
+# Anywhere else (a pipe, a file, CI) a line is plain "djdojo: text", as it always was, so whatever
+# reads the output keeps working. NO_COLOR (https://no-color.org) keeps the marks and drops the
+# colors. Where the locale is not UTF-8 the marks are ASCII.
+styled=no
+bold='' cyan='' green='' yellow='' red='' plain=''
+if [[ -t 2 && ${TERM:-dumb} != dumb ]]; then
+  styled=yes
+  if [[ -z ${NO_COLOR:-} ]]; then
+    bold=$'\033[1m' cyan=$'\033[36m' green=$'\033[32m' yellow=$'\033[33m'
+    red=$'\033[31m' plain=$'\033[0m'
+  fi
+fi
+case ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} in
+  *[Uu][Tt][Ff]-8*|*[Uu][Tt][Ff]8*) marks=('→' '•' '✓' '!' '✗') ;;
+  *) marks=('>' '-' '+' '!' 'x') ;;
+esac
+
+# Usage: msg step|note|ok|warn|err TEXT
+msg() {
+  local mark color text
+  if [[ $styled == no ]]; then
+    echo "djdojo: $2" >&2
+    return
+  fi
+  case $1 in
+    step) mark=${marks[0]} color=$cyan text=$bold ;;
+    note) mark=${marks[1]} color='' text='' ;;
+    ok) mark=${marks[2]} color=$green text=$green ;;
+    warn) mark=${marks[3]} color=$yellow text=$yellow ;;
+    *) mark=${marks[4]} color=$red text=$red ;;
+  esac
+  echo "${bold}${color}djdojo ${mark}${plain} ${text}$2${plain}" >&2
+}
+
+# A browser name becomes --cookies-from-browser, so yt-dlp uses your login from there. One profile
+# of the browser is named after a colon, as in "chrome:Profile 1".
 # Bare IDs become full URLs. Video: 11 characters, but not starting with a dash, which an
 # 11-character yt-dlp option like --dump-json does. Playlist: PL own, OL album, RD mix, UU channel
 # uploads, FL/LL/WL/LM favorites, likes, watch later and YouTube Music's "Liked Music".
@@ -108,7 +149,7 @@ for a in "$@"; do
   if [[ $prev == --cookies-from-browser ]]; then
     args+=("$a")
     login=$a
-  elif [[ $a =~ ^($browsers)$ ]]; then
+  elif [[ $a =~ ^($browsers)(:.+)?$ ]]; then
     args+=(--cookies-from-browser "$a")
     login=$a
   elif [[ $a == nologin ]]; then  # plain word for --no-cookies-from-browser, which still works
@@ -163,8 +204,8 @@ esac
 # The first-run questions. The answers go into the settings file, see the top of the script.
 setup() {
   local answer
+  msg note "First run. Two questions, the answers are stored in $(pretty "$config") and can be edited there."
   cat >&2 <<EOF
-djdojo: First run. Two questions, the answers are stored in $(pretty "$config") and can be edited there.
 
 Format:
   1) AIFF - plays on every deck and DJ app, even the oldest CDJs, about 10 MB per minute
@@ -188,18 +229,18 @@ format=$format
 folder=$(pretty "$dest")
 # login=no downloads without YouTube login, login=firefox always uses that browser
 EOF
-  echo "djdojo: Saved in $(pretty "$config")." >&2
+  msg ok "Saved in $(pretty "$config")."
   echo >&2
 }
 
 if [[ -f $config ]]; then
   read_config
   if [[ $format != aiff && $format != flac ]]; then
-    echo "djdojo: Unknown format \"$format\" in $(pretty "$config"). Write aiff or flac." >&2
+    msg err "Unknown format \"$format\" in $(pretty "$config"). Write aiff or flac."
     exit 1
   fi
-  if [[ -n $login_config && $login_config != no && ! $login_config =~ ^($browsers)$ ]]; then
-    echo "djdojo: Unknown login \"$login_config\" in $(pretty "$config"). Write no, or a browser name such as firefox." >&2
+  if [[ -n $login_config && $login_config != no && ! $login_config =~ ^($browsers)(:.+)?$ ]]; then
+    msg err "Unknown login \"$login_config\" in $(pretty "$config"). Write no, a browser name such as firefox, or a browser and one of its profiles such as chrome:Profile 1."
     exit 1
   fi
 elif [[ -t 0 ]]; then
@@ -234,11 +275,16 @@ case $format in
 esac
 FORMAT=$(upper "$format")
 
-# The first browser in the order that is logged in to the site. Uses yt-dlp's own cookie reading
-# and the same "logged in" rule as yt-dlp's code for the site. The Python that has yt-dlp's modules
-# is the one in yt-dlp's own shebang, with Homebrew, pipx and pip alike.
+# The first browser in the order that is logged in to the site, and every profile of it that is.
+# A browser can hold several profiles, each with its own login, say a private and a school one.
+# Named without a profile, yt-dlp reads the one whose cookies were written last, which with two
+# windows open is either of them. Uses yt-dlp's own cookie reading and the same "logged in" rule
+# as yt-dlp's code for the site. The Python that has yt-dlp's modules is the one in yt-dlp's own
+# shebang, with Homebrew, pipx and pip alike.
 # Usage: find_login SITE BROWSER ...
-# Prints the browser name, or one status line per browser and exit 1 if none is logged in.
+# Prints one line per logged-in profile, the most recently used first: the name to give
+# --cookies-from-browser, a tab, and the name to show. Or one status line per browser and exit 1
+# if none is logged in.
 find_login() {
   local python
   python=$(sed -n '1s/^#! *//p' "$(readlink -f "$(command -v yt-dlp)")")
@@ -247,8 +293,10 @@ find_login() {
     return 1
   fi
   "$python" - "$@" <<'PY'
+import json
+import os
 import sys
-from yt_dlp.cookies import extract_cookies_from_browser
+from yt_dlp import cookies
 
 class Logger:
     def __init__(self):
@@ -267,33 +315,208 @@ SITES = {
     'soundcloud': ('SoundCloud', 'soundcloud.com', lambda names: 'oauth_token' in names),
 }
 label, domain, logged_in = SITES[sys.argv[1]]
+
+def profiles(browser):
+    """The browser's profile folders as (folder, name to show), the most recently used first.
+    A single (None, None) when there are not several to choose from. That is also the answer
+    when yt-dlp's private helpers, which this leans on, have changed: yt-dlp then picks the
+    profile itself, as it did before djdojo looked at profiles."""
+    try:
+        names = {}
+        if browser == 'firefox':
+            roots = [os.path.abspath(root) for root in cookies._firefox_browser_dirs()]
+            files = list(cookies._firefox_cookie_dbs(roots))
+        elif browser == 'safari':
+            return [(None, None)]
+        else:
+            settings = cookies._get_chromium_based_browser_settings(browser)
+            if not settings['supports_profiles']:
+                return [(None, None)]
+            roots = [os.path.abspath(settings['browser_dir'])]
+            files = list(cookies._find_files(roots[0], 'Cookies', Logger()))
+            # The names the browser shows for its profiles, "Person 1" or "School". Only the
+            # folders listed here are profiles, which leaves out the internal System Profile.
+            try:
+                with open(os.path.join(roots[0], 'Local State'), encoding='utf8') as state:
+                    listed = json.load(state)['profile']['info_cache']
+                names = {folder: info.get('name') or folder for folder, info in listed.items()}
+            except Exception:
+                pass
+        used = {}
+        for file in files:
+            for root in roots:
+                relative = os.path.relpath(os.path.abspath(file), root)
+                if relative.startswith(os.pardir):
+                    continue
+                # Firefox: the folder the database sits in. Chromium: the first folder below the
+                # browser's own, since the database can sit deeper, in Network.
+                folder = os.path.dirname(relative)
+                if browser != 'firefox':
+                    folder = folder.split(os.sep)[0]
+                if folder and (not names or folder in names):
+                    used[folder] = max(used.get(folder, 0), os.lstat(file).st_mtime)
+        if len(used) < 2:
+            return [(None, None)]
+        return [(folder, names.get(folder, folder)) for folder in sorted(used, key=used.get, reverse=True)]
+    except Exception:
+        return [(None, None)]
+
 report = []
 for browser in sys.argv[2:]:
-    logger = Logger()
-    try:
-        jar = extract_cookies_from_browser(browser, logger=logger)
-    except Exception as error:
-        report.append(f'  {browser}: cannot read cookies ({error})')
-        continue
-    names = {cookie.name for cookie in jar if cookie.domain.endswith(domain)}
-    if logged_in(names):
-        print(browser)
+    found = []
+    errors = []
+    for folder, name in profiles(browser):
+        logger = Logger()
+        try:
+            jar = cookies.extract_cookies_from_browser(browser, folder, logger=logger)
+        except Exception as error:
+            errors.append(str(error))
+            continue
+        if logged_in({cookie.name for cookie in jar if cookie.domain.endswith(domain)}):
+            shown = browser.capitalize()
+            if folder is None:
+                found.append((browser, shown))
+            else:
+                found.append((f'{browser}:{folder}', f'{shown}, profile "{name}"'))
+        # Chrome without access to the keychain does not raise, it logs the error and skips the cookies
+        errors.extend(logger.errors)
+    if found:
+        print('\n'.join('\t'.join(pair) for pair in found))
         sys.exit(0)
-    # Chrome without access to the keychain does not raise, it logs the error and skips the cookies
-    status = f'cannot read cookies ({logger.errors[0]})' if logger.errors else f'not logged in to {label}'
+    status = f'cannot read cookies ({errors[0]})' if errors else f'not logged in to {label}'
     report.append(f'  {browser}: {status}')
 print('\n'.join(report))
 sys.exit(1)
 PY
 }
 
+# djdojo.conf sits next to the script, also when djdojo is linked into PATH
+conf="$(dirname "$(readlink -f "$0")")/djdojo.conf"
+ytdlp=(yt-dlp --ignore-config --config-locations "$conf" --paths "$dest" "${format_args[@]}")
+
+# Look up before starting: the playlist's name and count, the audio stream yt-dlp picks (256k
+# means the Premium or Go+ login works) and the folder, computed from djdojo.conf's own template.
+# The first track that can be downloaded is used, so a removed track 1 does not hide the rest.
+# djdojo is for one playlist at a time, so only the first URL is shown and counted.
+# Usage: lookup [yt-dlp options ...]
+# Leaves the answer in $info, empty when the playlist cannot be opened.
+info=
+announced=no
+lookup() {
+  if [[ $announced == no ]]; then
+    msg step "Looking up on $site_name ..."
+    announced=yes
+  fi
+  info=$("${ytdlp[@]}" "${args[@]}" "$@" --playlist-items 1:5 --max-downloads 1 --no-warnings \
+    --print $'%(playlist_title)s\t%(playlist_count)s\t%(title)s\t%(acodec)s\t%(abr).0f\t%(format_id)s\t%(ext)s\t%(filename)s' 2>/dev/null) || true
+}
+
+# Whether a lookup shows what a login is for: Premium or Go+ audio, or the uploader's own file
+top_audio() {
+  local abr format_id
+  IFS=$'\t' read -r _ _ _ _ abr format_id _ <<< "$1" || true
+  [[ ${format_id:-} == download ]] || { [[ ${abr:-} =~ ^[0-9]+$ ]] && (( abr >= 200 )); }
+}
+
+# "chrome:Profile 1" as it is shown: Chrome, profile "Profile 1"
+login_name() {
+  local browser=${1%%:*}
+  printf '%s%s' "$(upper "${browser:0:1}")" "${browser:1}"
+  if [[ $1 == *:* ]]; then
+    printf ', profile "%s"' "${1#*:}"
+  fi
+}
+
+# One login out of those find_login found, or none at all. The first track is looked up with each
+# login, and the first that gets what a login is for wins.
+# When none does and the search was djdojo's own, YouTube is asked without login. If that opens
+# the playlist, the login is left out: it adds nothing to the audio, and logged-in downloads are
+# the ones YouTube refuses first. A browser that was named keeps its login, which is the way to
+# insist on it, and so does SoundCloud, where a login gets the uploader's file track by track,
+# whatever the first track shows.
+# Otherwise a login that can open the playlist goes first, since a private playlist is only seen
+# by its own account, and with several of those the user chooses in a terminal.
+# Usage: choose_login own|named, with find_login's lines in $found
+# Sets $login, $login_label and $info, and $dropped and $keep_login when the login is left out.
+choose_login() {
+  local specs=() labels=() infos=() usable=() spec label i pick='' answer=''
+  while IFS=$'\t' read -r spec label; do
+    specs+=("$spec")
+    labels+=("$label")
+  done <<< "$found"
+  if (( ${#specs[@]} > 1 )); then
+    msg step "Found ${#specs[@]} $site_name logins, looking up which one gets $extras ..."
+    announced=yes
+  fi
+  for i in "${!specs[@]}"; do
+    lookup --cookies-from-browser "${specs[$i]}"
+    infos+=("$info")
+    if top_audio "$info"; then
+      pick=$i
+      break
+    fi
+    if [[ -n $info ]]; then
+      usable+=("$i")
+    fi
+  done
+  if [[ -z $pick ]]; then
+    if [[ $1 == own && $site == youtube ]]; then
+      lookup --no-cookies-from-browser
+      if [[ -n $info ]]; then
+        if (( ${#specs[@]} > 1 )); then
+          dropped="none of the ${#specs[@]} logins gets $extras for the first track"
+        else
+          dropped="the login from ${labels[0]} gets no $extras for the first track"
+        fi
+        keep_login="$rerun ${specs[0]%%:*}"
+        login=none
+        return
+      fi
+    fi
+    pick=${usable[0]:-0}
+    if (( ${#specs[@]} > 1 && ${#usable[@]} != 1 )) && [[ -t 0 ]]; then
+      msg warn "None of them gets $extras for the first track:"
+      for i in "${!specs[@]}"; do
+        echo "  $((i + 1))) ${labels[$i]}" >&2
+      done
+      read -r -p "Use [$((pick + 1))]: " answer || true
+      if [[ $answer =~ ^[1-9][0-9]*$ ]] && (( answer <= ${#specs[@]} )); then
+        pick=$((answer - 1))
+      fi
+      msg note "login=${specs[$pick]} in $(pretty "$config") skips this question."
+    fi
+  fi
+  info=${infos[$pick]}
+  login=${specs[$pick]}
+  login_label=${labels[$pick]}
+}
+
+# The browsers to look through: the usual three, or the one that was named without a profile.
+# A browser named with its profile, cookies from a file and nologin need no search.
+search=()
+whose=named
 if [[ -z $login ]]; then
-  if found=$(find_login "$site" firefox safari chrome); then
-    login=$found
-    args+=(--cookies-from-browser "$login")
-  else
+  search=(firefox safari chrome)
+  whose=own
+elif [[ $login =~ ^($browsers)$ ]]; then
+  search=("$login")
+fi
+login_label=
+dropped=
+keep_login=
+if (( ${#search[@]} > 0 )); then
+  # A browser that was named is used as it is when nothing can be told about its profiles
+  if found=$(find_login "$site" "${search[@]}"); then
+    choose_login "$whose"
+    if [[ $login == none ]]; then
+      args+=(--no-cookies-from-browser)
+      msg note "Downloading without login, since $dropped. To use the login anyway: $keep_login"
+    else
+      args+=(--cookies-from-browser "$login")
+    fi
+  elif [[ -z $login ]]; then
+    msg warn "Found no browser that is logged in to $site_name. Without login $extras_long."
     cat >&2 <<EOF
-djdojo: Found no browser that is logged in to $site_name. Without login $extras_long.
 
 $found
 
@@ -319,72 +542,77 @@ EOF
     esac
     login=none
     args+=(--no-cookies-from-browser)
-    echo "djdojo: login=no in $(pretty "$config") skips this question." >&2
+    msg note "login=no in $(pretty "$config") skips this question."
   fi
 fi
 
 case $login in
   none) via="without $site_name login" ;;
   file) via="with cookies from a file" ;;
-  *) via="with the $site_name login from $(upper "${login:0:1}")${login:1}" ;;
+  *) via="with the $site_name login from ${login_label:-$(login_name "$login")}" ;;
 esac
 
-# djdojo.conf sits next to the script, also when djdojo is linked into PATH
-conf="$(dirname "$(readlink -f "$0")")/djdojo.conf"
-ytdlp=(yt-dlp --ignore-config --config-locations "$conf" --paths "$dest" "${format_args[@]}")
-
-# Look up before starting: the playlist's name and count, the audio stream yt-dlp picks (256k
-# means the Premium or Go+ login works) and the folder, computed from djdojo.conf's own template.
-# The first track that can be downloaded is used, so a removed track 1 does not hide the rest.
-# djdojo is for one playlist at a time, so only the first URL is shown and counted.
-echo "djdojo: Looking up on $site_name ..." >&2
-info=$("${ytdlp[@]}" "${args[@]}" --playlist-items 1:5 --max-downloads 1 --no-warnings \
-  --print $'%(playlist_title)s\t%(playlist_count)s\t%(title)s\t%(acodec)s\t%(abr).0f\t%(format_id)s\t%(ext)s\t%(filename)s' 2>/dev/null) || true
+# Choosing between several logins has already looked up with the one that won
+if [[ -z $info ]]; then
+  lookup
+fi
 dir=
 IFS=$'\t' read -r ptitle pcount title acodec abr format_id ext file <<< "$info" || true
 if [[ -n ${file:-} ]]; then
   dir=$(dirname "$file")
   if [[ $ptitle != NA ]]; then
-    echo "djdojo: Downloading the playlist \"$ptitle\" ($pcount tracks) as $FORMAT $via" >&2
+    msg step "Downloading the playlist \"$ptitle\" ($pcount tracks) as $FORMAT $via"
   else
-    echo "djdojo: Downloading \"$title\" as $FORMAT $via" >&2
+    msg step "Downloading \"$title\" as $FORMAT $via"
   fi
   case $acodec in
     mp4a*) acodec=aac ;;
   esac
   # "download" is yt-dlp's name for the file a SoundCloud uploader offers for download
   if [[ $format_id == download ]]; then
-    echo "djdojo: Audio: the uploader's original file ($(upper "$ext"))" >&2
+    msg ok "Audio: the uploader's original file ($(upper "$ext"))"
   elif [[ $abr == NA ]]; then
-    echo "djdojo: Audio: $acodec" >&2
+    msg note "Audio: $acodec"
   elif [[ $abr -ge 200 ]]; then
-    echo "djdojo: Audio: $acodec ${abr}k, $premium quality" >&2
+    msg ok "Audio: $acodec ${abr}k, $premium quality"
   else
-    echo "djdojo: Audio: $acodec ${abr}k, not $premium quality" >&2
+    msg note "Audio: $acodec ${abr}k, not $premium quality"
   fi
-  echo "djdojo: The playlist goes into \"$(pretty "$dir")\"" >&2
+  msg note "The playlist goes into \"$(pretty "$dir")\""
 else
-  echo "djdojo: Could not look it up in advance, downloading as $FORMAT $via" >&2
+  msg warn "Could not look it up in advance, downloading as $FORMAT $via"
 fi
 
-count_files() {
-  if [[ -z $dir ]]; then
-    echo 0
-    return
+# The names of the audio files in the playlist's folder. The folder does not exist before the
+# first file, and find must not stop the script via pipefail.
+list_files() {
+  if [[ -n $dir ]]; then
+    (find "$dir" -maxdepth 1 -name "*.$format" 2>/dev/null || true) | sed 's|.*/||'
   fi
-  # The folder does not exist before the first file, and find must not stop the script via pipefail
-  (find "$dir" -maxdepth 1 -name "*.$format" 2>/dev/null || true) | wc -l | tr -d ' '
 }
 
 mkdir -p "$dest"
-before=$(count_files)
-
-# stderr is copied to a log file so the failed tracks can be counted afterwards. yt-dlp then sees
-# a pipe instead of the terminal, hence --color, so ERROR still shows in red.
+# stderr is copied to a log file so the failed tracks can be counted afterwards. The files that
+# are there already are listed, to count the new ones and to tell them from the old.
 errlog=$(mktemp -t djdojo)
-trap 'rm -f "$errlog"' EXIT
+existing=$(mktemp -t djdojo)
+picks=$(mktemp -t djdojo)
+trap 'rm -f "$errlog" "$existing" "$picks"' EXIT
+list_files > "$existing"
+before=$(wc -l < "$existing" | tr -d ' ')
+
+# yt-dlp sees a pipe instead of the terminal on stderr, hence --color, so ERROR still shows in
+# red. Only where djdojo colors its own lines, so a log file stays free of color codes.
+color_args=()
+if [[ -n $red ]]; then
+  color_args=(--color stderr:always)
+fi
+# yt-dlp notes for every track which format its audio came from, for the tracks that only came
+# as a video, further down. The file to write to is an output template, so a % in it is doubled.
 status=0
-{ "${ytdlp[@]}" "${args[@]}" --color stderr:always 2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
+{ "${ytdlp[@]}" "${args[@]}" ${color_args[@]+"${color_args[@]}"} \
+    --print-to-file $'after_move:%(extractor_key)s\t%(vcodec)s\t%(filepath)s' "${picks//%/%%}" \
+    2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
 
 # Covers: put each .jpg into the file of the same name and delete it. yt-dlp also fetches
 # thumbnails for tracks that already exist, so files with a cover are skipped, and files
@@ -418,20 +646,79 @@ for jpg in "$dir"/*.jpg; do
   rm -f "$jpg"
 done
 if (( covers > 0 )); then
-  echo "djdojo: Cover added to $covers $(files "$covers")" >&2
+  msg ok "Cover added to $covers $(files "$covers")"
 fi
 
-after=$(count_files)
-failed=$(grep -c 'ERROR:' "$errlog" || true)
-summary="djdojo: Done. $((after - before)) .$format $(files $((after - before))) downloaded"
-if (( before > 0 )); then
-  summary+=" ($before were there already)"
-fi
-echo "$summary. ${failed:-0} failed." >&2
+# Tracks that YouTube only offered as a video, which djdojo.conf's format falls back to. Its sound
+# is 128k AAC, about half of Premium audio, and the file is skipped on later runs, so the user is
+# told which ones to delete for another try. yt-dlp notes a format for the files that were there
+# already too, the one it would pick today, so only new files count.
+lesser=()
 if [[ -n $dir ]]; then
-  echo "djdojo: The playlist is in \"$(pretty "$dir")\"" >&2
+  while IFS=$'\t' read -r extractor vcodec path; do
+    name=${path##*/}
+    if [[ $extractor == Youtube && $vcodec != none && $vcodec != NA && -f $path ]] \
+        && ! grep -qxF -- "$name" "$existing"; then
+      lesser+=("$name")
+    fi
+  done < "$picks"
 fi
-if (( ${failed:-0} > 0 )); then
-  echo "djdojo: Run the same command again to retry the failed tracks. Tracks that are removed or blocked on YouTube cannot be downloaded." >&2
+
+after=$(list_files | wc -l | tr -d ' ')
+failed=$(grep -c 'ERROR:' "$errlog" || true)
+failed=${failed:-0}
+# HTTP 403 is the site refusing the request, counted apart because the same command again rarely
+# gets a different answer
+refused=$(grep -c 'ERROR:.*HTTP Error 403' "$errlog" || true)
+refused=${refused:-0}
+if (( after >= before )); then
+  summary="Done. $((after - before)) .$format $(files $((after - before))) downloaded"
+  if (( before > 0 )); then
+    summary+=" ($before were there already)"
+  fi
+else
+  # Files left the folder while yt-dlp ran, for example the folder was deleted to start over, so
+  # the difference no longer counts the downloads
+  summary="Done. The folder has $after .$format $(files "$after"), fewer than the $before at the start, so files were removed during the run"
+fi
+# Green when nothing failed, red when something failed and nothing came
+if (( failed == 0 )); then
+  outcome=ok
+elif (( after > before )); then
+  outcome=warn
+else
+  outcome=err
+fi
+msg "$outcome" "$summary. $failed failed."
+if [[ -n $dropped ]]; then
+  msg note "Downloaded without login, since $dropped. To use the login anyway: $keep_login"
+fi
+if [[ -n $dir ]]; then
+  msg note "The playlist is in \"$(pretty "$dir")\""
+fi
+if (( ${#lesser[@]} > 0 )); then
+  if (( ${#lesser[@]} == 1 )); then
+    msg warn "YouTube offered 1 track only as a video, so its audio is lower quality than usual:"
+  else
+    msg warn "YouTube offered ${#lesser[@]} tracks only as a video, so their audio is lower quality than usual:"
+  fi
+  for name in "${lesser[@]}"; do
+    echo "  $name" >&2
+  done
+  msg note "To try for the usual audio, delete what is listed and run the same command again."
+fi
+if (( refused > 0 )); then
+  # With a login yt-dlp asks the site in another way than without, so one can be refused while the
+  # other works. The lookup before the download does not show it: the 403 comes on the audio itself.
+  hint="$site_name refused $refused of the failed tracks (HTTP Error 403). Run \"brew upgrade\" and try the same command again"
+  case $login in
+    none) hint+=". If they are still refused, $site_name may be limiting your network, and waiting a few hours helps." ;;
+    file) hint+=", or leave out the cookies file and with it the $extras." ;;
+    *) hint+=", or download without login and without $extras: $rerun nologin" ;;
+  esac
+  msg warn "$hint"
+fi
+if (( failed > refused )); then
+  msg note "Run the same command again to retry the failed tracks. Tracks that are removed or blocked on $site_name cannot be downloaded."
 fi
 exit "$status"

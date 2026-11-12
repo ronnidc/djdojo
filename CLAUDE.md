@@ -27,6 +27,11 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   own yt-dlp config never interferes. Arguments on the command line come after the config and win.
 - A config option cannot be switched off from the command line, so everything that differs between
   AIFF and FLAC lives in `djdojo` (`format_args`), and `djdojo.conf` holds only what both share.
+- Every line `djdojo` says goes through `msg KIND TEXT` (`step`, `note`, `ok`, `warn`, `err`).
+  With stderr in a terminal it is the name and a mark in bold and in the kind's color, with the
+  text colored too for `ok`, `warn` and `err`. Anywhere else it is plain `djdojo: TEXT`, which is
+  what tests through a pipe see. Lists and questions stay plain `echo`
+  and `read -p`.
 - `djdojo` is for one playlist per run: the pre-flight lookup and the final count use the first URL,
   and its site (`site`, youtube or soundcloud) picks the login search and the wording.
 
@@ -65,6 +70,26 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
 - With cookies, yt-dlp only adds the `web_music` client (Premium 256k audio) for
   `music.youtube.com` URLs. That is why `djdojo` expands bare IDs to music.youtube.com, and why the
   "YouTube Music is not directly supported" warning is expected.
+- With cookies yt-dlp asks YouTube through other player clients (`web_embedded`, `tv_samsung`,
+  `web`, plus `web_music`) than without (`tv_samsung`, `visionos`), so a logged-in run can fail on
+  every track with `HTTP Error 403` while `nologin` works (yt-dlp 2026.10.26, yt-dlp issue #17989:
+  YouTube's PO token experiment on `web_embedded`). The pre-flight lookup does not see it, since
+  the 403 comes on the audio request, not on the extraction. That is why `djdojo` leaves a
+  login out when it gets no Premium audio for the first track.
+- When no audio-only stream is left, `ba/b` falls back to itag 18, a 360p video whose sound was
+  measured as AAC-LC 128k at 44.1 kHz. `djdojo` lists the new files that came that way. It learns
+  the format from `--print-to-file "after_move:..."`, which unlike `--print` implies neither
+  `--quiet` nor `--simulate`, and costs one `[info] Writing ...` line per track. At `after_move`
+  `filepath` is the finished file and `vcodec` is `none` for an audio stream. For a file that was
+  there already the fields are those of the format yt-dlp would pick today, so `djdojo` compares
+  with the files listed before the run.
+- `--cookies-from-browser chrome` without a profile reads the `Cookies` file that was written
+  last, so with two Chrome windows open the profile is either of them. `find_login` lists the
+  profile folders through yt-dlp's private helpers (`_get_chromium_based_browser_settings`,
+  `_find_files`, `_firefox_browser_dirs`, `_firefox_cookie_dbs`) and falls back to the bare
+  browser name when they have changed. Chrome's own profile names are in `Local State` next to
+  the profile folders, under `profile.info_cache.<folder>.name`. Only folders listed there are
+  profiles, `System Profile` is not. Each profile read asks the keychain once more.
 - yt-dlp's "logged in" rule is `LOGIN_INFO` plus one of `SAPISID`, `__Secure-1PAPISID`,
   `__Secure-3PAPISID` on youtube.com. `find_login` in `djdojo` reuses `yt_dlp.cookies` through the
   Python in yt-dlp's own shebang, which is the one that has yt-dlp's modules.
@@ -91,6 +116,26 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   with yt-dlp's real Python in its shebang. `djdojo` takes the Python from that shebang, the fake
   module wins through `PYTHONPATH`, and the stub prints a canned `--print` line (for the "Audio"
   line) or the browser it got. A stub whose shebang points nowhere tests the missing-Python hint.
+- shellcheck is not installed on the Mac. Run it as CI does, in a container:
+  `docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:stable djdojo`.
+- Test the choice between profiles against yt-dlp's real cookies module, with `HOME=<scratch>` so
+  every browser folder is a scratch one. The stub `yt-dlp`'s shebang names a bash wrapper instead
+  of Python: `djdojo` only reads the path and runs it with the program on stdin, so the wrapper
+  can start yt-dlp's real Python with `extract_cookies_from_browser` replaced for Chromium, whose
+  real reader asks the keychain. A Chrome profile is then a folder with a `Cookies` file holding
+  cookie names, ordered with `touch -t`, plus a `Local State` with the names. Firefox needs no
+  replacement: a `cookies.sqlite` with a `moz_cookies` table (`host`, `name`, `value`, `path`,
+  `expiry`, `isSecure`, `originAttributes`) is read by yt-dlp's own code. The stub answers the
+  lookup by the login it got, which is how one profile is given Premium audio.
+- Test the closing summary and its hints with a stub `yt-dlp` first in `PATH`: a bash script that
+  answers the `--print` lookup with one tab-separated line, and otherwise changes the folder,
+  writes canned `ERROR:` lines to stderr, colored as yt-dlp does with `--color stderr:always`,
+  and appends canned lines to the file after `--print-to-file TEMPLATE`. A browser with a profile
+  (`chrome:Default`) or `nologin` on the command line keeps `find_login` out of it.
+- The fallback to a video is forced for real with `-f 18` after the other arguments, on a
+  free-use track: the closing lines then list the file, and a rerun without `-f` does not.
+- The terminal look needs a terminal and a `TERM` that is not `dumb`: run through `expect` with
+  `TERM=xterm-256color` and `LANG=en_US.UTF-8`, and strip the color codes before matching.
 - Run `djdojo` with `HOME=<scratch>` to test its config and first-run questions: the config, the
   default folder and `~` in messages then all land in the scratchpad. The questions need a tty, so
   drive them with `expect` (ships with macOS). Match prompts with `expect -ex {[1]: }`, in
