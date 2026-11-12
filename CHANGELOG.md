@@ -4,6 +4,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-12
+
 ### Changed
 
 - The README and the hint after `HTTP Error 403` say `brew update && brew upgrade`. `brew upgrade` alone only looks for new versions once a day, so it could miss a fix that just came out.
@@ -78,7 +80,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/ronnidc/djdojo/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/ronnidc/djdojo/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ronnidc/djdojo/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/ronnidc/djdojo/compare/v1.1.0...v1.1.1
