@@ -53,8 +53,9 @@ Requires macOS and [Homebrew](https://brew.sh). Nothing else needs to be install
 brew install ronnidc/tap/djdojo
 ```
 
-Update with `brew upgrade`. YouTube changes things often, so when a download suddenly fails, that
-is the first step.
+Update with `brew update && brew upgrade`. YouTube changes things often, so when a download
+suddenly fails, that is the first step. `brew upgrade` alone only looks for new versions once a
+day, so it can miss a fix that just came out.
 
 ## Usage
 
@@ -161,8 +162,8 @@ file in the folder yourself.
 | `not logged in to YouTube`                | Log in to music.youtube.com in the browser                       |
 | `not logged in to SoundCloud`             | Log in to soundcloud.com in the browser                          |
 | `Video unavailable`                       | The track is removed or blocked on YouTube, cannot be downloaded |
-| `Requested format is not available`       | YouTube changed something, run `brew upgrade`                    |
-| `HTTP Error 403: Forbidden`               | YouTube refused the track, run `brew upgrade` or add `nologin`   |
+| `Requested format is not available`       | YouTube changed something, run `brew update && brew upgrade`     |
+| `HTTP Error 403: Forbidden`               | YouTube refused the track, update as above or add `nologin`      |
 | `YouTube Music is not directly supported` | Only a warning, everything works                                 |
 | `only available for registered users`     | SoundCloud without login, the stream is used instead             |
 

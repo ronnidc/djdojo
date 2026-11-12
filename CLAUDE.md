@@ -36,6 +36,9 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   (`render`, the default) and `verbose`, where yt-dlp writes to the terminal itself and only its
   stderr is copied for the summary. The summary reads the same three files after either:
   `$errlog`, `$existing` and `$picks`.
+- Messages and README say `brew update && brew upgrade`, never `brew upgrade` alone: Homebrew
+  only runs `brew update` before it once every 24 hours (`HOMEBREW_AUTO_UPDATE_SECS`), so a user
+  who updated earlier the same day would not get a release that just came out.
 - `djdojo` is for one playlist per run: the pre-flight lookup and the final count use the first URL,
   and its site (`site`, youtube or soundcloud) picks the login search and the wording.
 

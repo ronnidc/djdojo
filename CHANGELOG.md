@@ -4,6 +4,10 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- The README and the hint after `HTTP Error 403` say `brew update && brew upgrade`. `brew upgrade` alone only looks for new versions once a day, so it could miss a fix that just came out.
+
 ## [1.3.0] - 2026-11-12
 
 ### Added

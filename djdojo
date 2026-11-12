@@ -871,7 +871,7 @@ fi
 if (( refused > 0 )); then
   # With a login yt-dlp asks the site in another way than without, so one can be refused while the
   # other works. The lookup before the download does not show it: the 403 comes on the audio itself.
-  hint="$site_name refused $refused of the failed tracks (HTTP Error 403). Run \"brew upgrade\" and try the same command again"
+  hint="$site_name refused $refused of the failed tracks (HTTP Error 403). Run \"brew update && brew upgrade\" and try the same command again"
   case $login in
     none) hint+=". If they are still refused, $site_name may be limiting your network, and waiting a few hours helps." ;;
     file) hint+=", or leave out the cookies file and with it the $extras." ;;
