@@ -6,6 +6,9 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ### Added
 
+- `verbose` on the command line shows everything yt-dlp says, as `djdojo` did before. yt-dlp's own `-v` does the same.
+- Everything yt-dlp said in the last run is kept in `~/.config/djdojo/last-run.log`.
+
 - A browser with several logged-in profiles, for example a private and a school profile in Chrome: `djdojo` looks up the first track with each and uses the first one that gets Premium audio, or Go+ audio or the uploader's original file on SoundCloud. The line about the download names the profile. When none does and the playlist needs a login, it asks which one to use.
 - One profile of a browser can be named: `"chrome:Profile 1"` on the command line, or `login=chrome:Profile 1` in `~/.config/djdojo/config`.
 - Tracks that YouTube only offers as a video are listed at the end, since their audio is the video's 128k AAC. Deleting them and running the same command again tries for the usual audio.
@@ -13,6 +16,7 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ### Changed
 
+- `djdojo` shows one line per track instead of everything yt-dlp says: downloaded, was there already, or failed and why. In a terminal the line of the track being downloaded shows its number, title and percentage.
 - When no login gets Premium audio for the first track, a YouTube playlist that can be opened without login is downloaded without it, and `djdojo` says so at the start and at the end. Naming the browser, on the command line or as `login=` in the config, keeps the login.
 - A browser named without a profile has its profiles looked through in the same way. Before, yt-dlp took the profile that was used last, which with two browser windows open could be either.
 - yt-dlp's errors are only colored in a terminal, so saved output is free of color codes.

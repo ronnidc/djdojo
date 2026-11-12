@@ -16,16 +16,23 @@ djdojo PLRBp0Fe2GpgliIz-BjIwIBgysth8ZkE8c
 # djdojo → Downloading the playlist "NCS - Instrumental Future House" (20 tracks) as AIFF with the YouTube login from Firefox
 # djdojo ✓ Audio: opus 263k, Premium quality
 # djdojo • The playlist goes into "~/Music/djdojo/NCS - Instrumental Future House"
+# djdojo ✓ 01/20 Clarx - H.A.Y | Future House | NCS - Copyright Free Music
+# djdojo ✓ 02/20 Clarx - Zig Zag | Future House | NCS - Copyright Free Music
 # ...
 # djdojo ✓ Done. 20 .aiff files downloaded. 0 failed.
 # djdojo • The playlist is in "~/Music/djdojo/NCS - Instrumental Future House"
 ```
 
-The name and the mark are colored and tell the lines apart at a glance, between the many lines
-from yt-dlp: `→` for what `djdojo` is doing, `•` for information, `✓` for what went well, `!` for
-what needs your attention and `✗` for what failed. The last three are colored all the way: green,
-yellow and red. `NO_COLOR=1` turns the colors off. Output that is piped or saved to a file is plain
-text, every line starting with `djdojo:`.
+Every track gets one line: `✓` when it is downloaded, `•` when it was there already, and `✗` with
+the reason when it failed. While a track downloads, its line shows how far it is. The name and the
+mark are colored and tell the lines apart at a glance: `→` for what `djdojo` is doing, `•` for
+information, `✓` for what went well, `!` for what needs your attention and `✗` for what failed. The
+last three are colored all the way: green, yellow and red. `NO_COLOR=1` turns the colors off.
+Output that is piped or saved to a file is plain text, every line starting with `djdojo:`.
+
+`djdojo` runs [yt-dlp](https://github.com/yt-dlp/yt-dlp), which says a lot more. Add `verbose` to
+see all of it instead. Either way, everything yt-dlp said in the last run is kept in
+`~/.config/djdojo/last-run.log`, which is the file to send along when you report a problem.
 
 Every file is decoded once from the best audio stream and stored lossless with title, artist,
 album, track number and cover. MP3 would add another lossy step, and VBR MP3 can give imprecise cue
@@ -57,6 +64,7 @@ djdojo PLxxxxxxxx flac        # FLAC instead of the default format, this once
 djdojo PLxxxxxxxx safari      # login from a specific browser
 djdojo LM                     # YouTube Music's "Liked Music"
 djdojo PLxxxxxxxx nologin     # without login, and without the Premium audio
+djdojo PLxxxxxxxx verbose     # everything yt-dlp says, instead of one line per track
 djdojo SOUNDCLOUD_LINK        # a SoundCloud playlist, album, profile or track
 djdojo --help
 ```
@@ -157,6 +165,9 @@ file in the folder yourself.
 | `HTTP Error 403: Forbidden`               | YouTube refused the track, run `brew upgrade` or add `nologin`   |
 | `YouTube Music is not directly supported` | Only a warning, everything works                                 |
 | `only available for registered users`     | SoundCloud without login, the stream is used instead             |
+
+A failed track's line ends with yt-dlp's reason. The last two messages are warnings, which only
+show with `verbose` and in `~/.config/djdojo/last-run.log`.
 
 Failed tracks are counted at the end. Run the same command again to retry them, the downloaded
 ones are skipped. When YouTube refuses tracks with `HTTP Error 403`, `djdojo` says so and shows the

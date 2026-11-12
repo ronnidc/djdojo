@@ -46,7 +46,7 @@ usage() {
     flac) flac_default=" (default)" ;;
   esac
   cat <<EOF
-Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [yt-dlp options ...]
+Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [verbose] [yt-dlp options ...]
 
 Turns your YouTube or SoundCloud playlist into lossless audio files for DJ practice, the whole playlist in one folder.
 For private practice with music you have the right to download. For public or professional use, buy the music.
@@ -56,6 +56,7 @@ For private practice with music you have the right to download. For public or pr
   flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer$flac_default
   chrome ...  YouTube or SoundCloud login from that browser. Without one, Firefox, Safari and Chrome are tried
   nologin     without login, so without YouTube's Premium audio and SoundCloud's original files
+  verbose     shows everything yt-dlp says, instead of one line per track
 
 The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
 Edit the file, or delete it to be asked again. The file can also hold the login: login=no, a
@@ -145,6 +146,7 @@ args=()
 prev=
 login=  # browser name, "file" or "none". Empty = find a browser that is logged in.
 format_arg=
+view=calm  # one line per track, or "full": everything yt-dlp says, as it says it
 for a in "$@"; do
   if [[ $prev == --cookies-from-browser ]]; then
     args+=("$a")
@@ -155,6 +157,8 @@ for a in "$@"; do
   elif [[ $a == nologin ]]; then  # plain word for --no-cookies-from-browser, which still works
     args+=(--no-cookies-from-browser)
     login=none
+  elif [[ $a == verbose ]]; then
+    view=full
   elif [[ $a == aiff || $a == flac ]]; then
     format_arg=$a
   elif [[ $a != -* && $a =~ ^[0-9A-Za-z_-]{11}$ ]]; then
@@ -165,6 +169,7 @@ for a in "$@"; do
     case $a in
       --cookies) login="file" ;;
       --no-cookies-from-browser) login=none ;;
+      -v|--verbose) view=full ;;  # yt-dlp's debug lines are asked for, so they are shown
     esac
     args+=("$a")
   fi
@@ -592,8 +597,9 @@ list_files() {
 }
 
 mkdir -p "$dest"
-# stderr is copied to a log file so the failed tracks can be counted afterwards. The files that
-# are there already are listed, to count the new ones and to tell them from the old.
+# What the summary needs afterwards: yt-dlp's ERROR lines, the files that are there already, to
+# count the new ones and to tell them from the old, and the format each track's audio came from,
+# for the tracks that only came as a video.
 errlog=$(mktemp -t djdojo)
 existing=$(mktemp -t djdojo)
 picks=$(mktemp -t djdojo)
@@ -601,18 +607,170 @@ trap 'rm -f "$errlog" "$existing" "$picks"' EXIT
 list_files > "$existing"
 before=$(wc -l < "$existing" | tr -d ' ')
 
-# yt-dlp sees a pipe instead of the terminal on stderr, hence --color, so ERROR still shows in
-# red. Only where djdojo colors its own lines, so a log file stays free of color codes.
-color_args=()
-if [[ -n $red ]]; then
-  color_args=(--color stderr:always)
-fi
-# yt-dlp notes for every track which format its audio came from, for the tracks that only came
-# as a video, further down. The file to write to is an output template, so a % in it is doubled.
+# yt-dlp says some 40 lines per track, which mean little to someone who wants the music. So
+# djdojo shows one line per track and keeps everything yt-dlp said in the last run in a file,
+# for when that is not enough. yt-dlp marks the moments djdojo acts on with lines of its own that
+# start with $mark: the download of a track begins, its percentage, and the finished file.
+mark='@@djdojo'
+runlog="$(dirname "$config")/last-run.log"
+
+# TEXT cut to at most WIDTH columns of the terminal. A character outside ASCII may take two
+# columns, as a Japanese title does, and bash cannot tell, so each of them counts as two.
+# Usage: fit TEXT WIDTH
+fit() {
+  local text=$1 width=$2 wide keep
+  wide=${text//[[:ascii:]]/}
+  keep=$((width - ${#wide}))
+  if (( keep < width / 2 )); then
+    keep=$((width / 2))
+  fi
+  if (( keep < 1 )); then
+    text=
+  elif (( ${#text} > keep )); then
+    text=${text:0:keep}
+  fi
+  printf '%s' "$text"
+}
+
+# The three below are parts of render and use its variables.
+# The number of the track at hand as "012/180 ", nothing when it has none, as a single track
+track_number() {
+  if [[ -n $n ]]; then
+    printf '%0*d/%s ' "${#of}" "$((10#$n))" "$of"
+  fi
+}
+
+# Redraws the line of the track at hand in place. Only in a terminal.
+redraw() {
+  if [[ $styled == yes ]]; then
+    printf '\r%sdjdojo %s%s %s\033[K' "$bold$cyan" "${marks[0]}" "$plain" "$1" >&2
+    live=yes
+  fi
+}
+
+# The final line of a track, in place of the one that was redrawn
+# Usage: settle ok|note|err TEXT
+settle() {
+  if [[ $live == yes ]]; then
+    printf '\r\033[K' >&2
+    live=no
+  fi
+  msg "$1" "$2"
+  n='' of='' title='' head='' pct=''
+}
+
+# Turns yt-dlp's output, on stdin, into one line per track: it went well, was there already, or
+# failed and why. In a terminal the line of the track at hand is kept up to date in place: its
+# number as soon as yt-dlp says "Downloading item N of M", so a track that fails at once still
+# has one, its title when the download begins, and the percentage after that. That line is cut
+# to the terminal's width, since a line that wraps cannot be redrawn.
+# Everything goes into $runlog, the ERROR lines also into $errlog and the finished tracks'
+# formats into $picks, for the summary.
+render() {
+  local line kind a b c n='' of='' title='' head='' pct='' live=no cols=80 reason name text
+  local who='^\[[^]]+\] [^:]+: (.*)$'
+  if [[ $styled == yes ]]; then
+    cols=$(stty size <&2 2>/dev/null | cut -d' ' -f2)
+    if [[ ! $cols =~ ^[0-9]+$ ]]; then
+      cols=80
+    fi
+  fi
+  while IFS= read -r line; do
+    case $line in
+      "$mark"$'\t'*)
+        IFS=$'\t' read -r _ kind a b c <<< "$line"
+        case $kind in
+          start)
+            printf '%s\n' "$line" >> "$runlog"
+            if [[ -z $n && $a =~ ^[0-9]+$ && $b =~ ^[0-9]+$ ]]; then
+              n=$a of=$b
+            fi
+            title=$c
+            # What is left of the width after "djdojo → ", the number and "  100%"
+            text=$(track_number)
+            head=$text$(fit "$title" $((cols - 16 - ${#text})))
+            redraw "$head"
+            ;;
+          pct)
+            a=${a//[^0-9.]/}
+            a=${a%%.*}
+            if [[ -n $head && -n $a && $a != "$pct" ]]; then
+              pct=$a
+              redraw "$head  $pct%"
+            fi
+            ;;
+          *)
+            printf '%s\n' "$line" >> "$runlog"
+            printf '%s\t%s\t%s\n' "$a" "$b" "$c" >> "$picks"
+            name=${c##*/}
+            text=$(track_number)${title:-$name}
+            if grep -qxF -- "$name" "$existing"; then
+              settle note "$text (was there already)"
+            else
+              settle ok "$text"
+            fi
+            ;;
+        esac
+        ;;
+      '[download] Downloading item '*)
+        printf '%s\n' "$line" >> "$runlog"
+        if [[ $line =~ item\ ([0-9]+)\ of\ ([0-9]+) ]]; then
+          n=${BASH_REMATCH[1]} of=${BASH_REMATCH[2]} title='' head='' pct=''
+          redraw "$(track_number)..."
+        fi
+        ;;
+      ERROR:*)
+        printf '%s\n' "$line" >> "$runlog"
+        printf '%s\n' "$line" >> "$errlog"
+        # "[youtube] abcdefghijk: Video unavailable" says which site and video, the reason is the rest
+        reason=${line#ERROR: }
+        if [[ $reason =~ $who ]]; then
+          reason=${BASH_REMATCH[1]}
+        fi
+        text=$(track_number)${title:+$title }
+        if [[ -n $text ]]; then
+          settle err "${text}failed: $reason"
+        else
+          settle err "$reason"
+        fi
+        ;;
+      *)
+        printf '%s\n' "$line" >> "$runlog"
+        ;;
+    esac
+  done
+  if [[ $live == yes ]]; then
+    printf '\r\033[K' >&2
+  fi
+}
+
 status=0
-{ "${ytdlp[@]}" "${args[@]}" ${color_args[@]+"${color_args[@]}"} \
-    --print-to-file $'after_move:%(extractor_key)s\t%(vcodec)s\t%(filepath)s' "${picks//%/%%}" \
-    2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
+if [[ $view == full ]]; then
+  # yt-dlp sees a pipe instead of the terminal on stderr, hence --color, so ERROR still shows in
+  # red. Only where djdojo colors its own lines, so saved output stays free of color codes.
+  color_args=()
+  if [[ -n $red ]]; then
+    color_args=(--color stderr:always)
+  fi
+  # The format of every track goes into a file here, since stdout is the terminal's. The file to
+  # write to is an output template, so a % in it is doubled.
+  { "${ytdlp[@]}" "${args[@]}" ${color_args[@]+"${color_args[@]}"} \
+      --print-to-file $'after_move:%(extractor_key)s\t%(vcodec)s\t%(filepath)s' "${picks//%/%%}" \
+      2>&1 1>&3 | tee "$errlog" >&2; } 3>&1 || status=$?
+else
+  mkdir -p "$(dirname "$runlog")"
+  : > "$runlog"
+  # --print alone makes yt-dlp quiet, and the file is to hold everything, hence --no-quiet. The
+  # progress comes on lines of its own, since render reads line by line.
+  set +e
+  "${ytdlp[@]}" "${args[@]}" --no-quiet --newline \
+      --print "before_dl:$mark"$'\tstart\t%(playlist_autonumber)s\t%(n_entries)s\t%(title)s' \
+      --print "after_move:$mark"$'\tdone\t%(extractor_key)s\t%(vcodec)s\t%(filepath)s' \
+      --progress-template "download:$mark"$'\tpct\t%(progress._percent_str)s' \
+      2>&1 | render
+  status=${PIPESTATUS[0]}
+  set -e
+fi
 
 # Covers: put each .jpg into the file of the same name and delete it. yt-dlp also fetches
 # thumbnails for tracks that already exist, so files with a cover are skipped, and files
@@ -720,5 +878,8 @@ if (( refused > 0 )); then
 fi
 if (( failed > refused )); then
   msg note "Run the same command again to retry the failed tracks. Tracks that are removed or blocked on $site_name cannot be downloaded."
+fi
+if (( failed > 0 )) && [[ $view == calm ]]; then
+  msg note "Everything yt-dlp said is in $(pretty "$runlog")"
 fi
 exit "$status"

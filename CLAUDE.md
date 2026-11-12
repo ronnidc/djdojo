@@ -30,8 +30,11 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
 - Every line `djdojo` says goes through `msg KIND TEXT` (`step`, `note`, `ok`, `warn`, `err`).
   With stderr in a terminal it is the name and a mark in bold and in the kind's color, with the
   text colored too for `ok`, `warn` and `err`. Anywhere else it is plain `djdojo: TEXT`, which is
-  what tests through a pipe see. Lists and questions stay plain `echo`
-  and `read -p`.
+  what tests through a pipe see. Lists and questions stay plain `echo` and `read -p`.
+- Two ways to run yt-dlp, and a change to one usually belongs in the other: the line per track
+  (`render`, the default) and `verbose`, where yt-dlp writes to the terminal itself and only its
+  stderr is copied for the summary. The summary reads the same three files after either:
+  `$errlog`, `$existing` and `$picks`.
 - `djdojo` is for one playlist per run: the pre-flight lookup and the final count use the first URL,
   and its site (`site`, youtube or soundcloud) picks the login search and the wording.
 
@@ -77,12 +80,20 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   the 403 comes on the audio request, not on the extraction. That is why `djdojo` leaves a
   login out when it gets no Premium audio for the first track.
 - When no audio-only stream is left, `ba/b` falls back to itag 18, a 360p video whose sound was
-  measured as AAC-LC 128k at 44.1 kHz. `djdojo` lists the new files that came that way. It learns
-  the format from `--print-to-file "after_move:..."`, which unlike `--print` implies neither
-  `--quiet` nor `--simulate`, and costs one `[info] Writing ...` line per track. At `after_move`
-  `filepath` is the finished file and `vcodec` is `none` for an audio stream. For a file that was
-  there already the fields are those of the format yt-dlp would pick today, so `djdojo` compares
-  with the files listed before the run.
+  measured as AAC-LC 128k at 44.1 kHz. `djdojo` lists the new files that came that way. At
+  `after_move` `filepath` is the finished file and `vcodec` is `none` for an audio stream. For a
+  file that was there already the fields are those of the format yt-dlp would pick today, so
+  `djdojo` compares with the files listed before the run. With `verbose` the format comes from
+  `--print-to-file "after_move:..."`, which unlike `--print` implies neither `--quiet` nor
+  `--simulate`, and costs one `[info] Writing ...` line per track.
+- The line per track is made by `render`, which reads yt-dlp's stdout and stderr through one
+  pipe. `--print` alone implies `--quiet`, and `--no-quiet` takes that back, so the output still
+  holds everything for `last-run.log`. `--print` at `before_dl` or later does not imply
+  `--simulate`. `before_dl` and `after_move` also fire for a file that is there already.
+  `--newline` puts each progress update on its own line, and `--progress-template "download:..."`
+  shapes it. yt-dlp flushes after every line, so the pipe is live. A track that fails before
+  `before_dl`, as an unavailable video does, is only known by yt-dlp's own line
+  `[download] Downloading item N of M`, which `render` reads for the number.
 - `--cookies-from-browser chrome` without a profile reads the `Cookies` file that was written
   last, so with two Chrome windows open the profile is either of them. `find_login` lists the
   profile folders through yt-dlp's private helpers (`_get_chromium_based_browser_settings`,
@@ -132,6 +143,13 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   writes canned `ERROR:` lines to stderr, colored as yt-dlp does with `--color stderr:always`,
   and appends canned lines to the file after `--print-to-file TEMPLATE`. A browser with a profile
   (`chrome:Default`) or `nologin` on the command line keeps `find_login` out of it.
+- A stub `yt-dlp` tells the lookup from the download by the template after `--print`: only the
+  lookup's has `playlist_title`. For the line per track it writes a scripted run to stdout: the
+  `@@djdojo` marker lines (`start`, `pct`, `done`, tab-separated), `Downloading item N of M` and
+  `ERROR:` lines, in the order a real run has them. What the stub says on stdout is hidden by
+  `render`, so a stub reports through a file.
+- The line that is redrawn is checked through `expect` with a set width
+  (`set stty_init "cols 100 rows 30"`): turn `\r` into newlines and look for the clear-line code.
 - The fallback to a video is forced for real with `-f 18` after the other arguments, on a
   free-use track: the closing lines then list the file, and a rerun without `-f` does not.
 - The terminal look needs a terminal and a `TERM` that is not `dumb`: run through `expect` with
