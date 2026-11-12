@@ -4,11 +4,12 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-12
+
 ### Added
 
 - `verbose` on the command line shows everything yt-dlp says, as `djdojo` did before. yt-dlp's own `-v` does the same.
 - Everything yt-dlp said in the last run is kept in `~/.config/djdojo/last-run.log`.
-
 - A browser with several logged-in profiles, for example a private and a school profile in Chrome: `djdojo` looks up the first track with each and uses the first one that gets Premium audio, or Go+ audio or the uploader's original file on SoundCloud. The line about the download names the profile. When none does and the playlist needs a login, it asks which one to use.
 - One profile of a browser can be named: `"chrome:Profile 1"` on the command line, or `login=chrome:Profile 1` in `~/.config/djdojo/config`.
 - Tracks that YouTube only offers as a video are listed at the end, since their audio is the video's 128k AAC. Deleting them and running the same command again tries for the usual audio.
@@ -73,7 +74,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/ronnidc/djdojo/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ronnidc/djdojo/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/ronnidc/djdojo/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ronnidc/djdojo/compare/v1.0.0...v1.1.0
