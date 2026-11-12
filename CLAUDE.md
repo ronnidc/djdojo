@@ -27,7 +27,8 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   own yt-dlp config never interferes. Arguments on the command line come after the config and win.
 - A config option cannot be switched off from the command line, so everything that differs between
   AIFF and FLAC lives in `djdojo` (`format_args`), and `djdojo.conf` holds only what both share.
-- Every line `djdojo` says goes through `msg KIND TEXT` (`step`, `note`, `ok`, `warn`, `err`).
+- Every line `djdojo` says goes through `msg KIND TEXT` (`step`, `note`, `ok`, `warn`, `err`, and
+  `aside` for a toned-down line in parentheses).
   With stderr in a terminal it is the name and a mark in bold and in the kind's color, with the
   text colored too for `ok`, `warn` and `err`. Anywhere else it is plain `djdojo: TEXT`, which is
   what tests through a pipe see. Lists and questions stay plain `echo` and `read -p`.

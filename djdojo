@@ -104,11 +104,11 @@ pretty() {
 # reads the output keeps working. NO_COLOR (https://no-color.org) keeps the marks and drops the
 # colors. Where the locale is not UTF-8 the marks are ASCII.
 styled=no
-bold='' cyan='' green='' yellow='' red='' plain=''
+bold='' dim='' cyan='' green='' yellow='' red='' plain=''
 if [[ -t 2 && ${TERM:-dumb} != dumb ]]; then
   styled=yes
   if [[ -z ${NO_COLOR:-} ]]; then
-    bold=$'\033[1m' cyan=$'\033[36m' green=$'\033[32m' yellow=$'\033[33m'
+    bold=$'\033[1m' dim=$'\033[2m' cyan=$'\033[36m' green=$'\033[32m' yellow=$'\033[33m'
     red=$'\033[31m' plain=$'\033[0m'
   fi
 fi
@@ -117,21 +117,24 @@ case ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} in
   *) marks=('>' '-' '+' '!' 'x') ;;
 esac
 
-# Usage: msg step|note|ok|warn|err TEXT
+# An aside is information that is only there to be found when it is needed, so the whole line is
+# toned down.
+# Usage: msg step|note|aside|ok|warn|err TEXT
 msg() {
-  local mark color text
+  local mark name text
   if [[ $styled == no ]]; then
     echo "djdojo: $2" >&2
     return
   fi
   case $1 in
-    step) mark=${marks[0]} color=$cyan text=$bold ;;
-    note) mark=${marks[1]} color='' text='' ;;
-    ok) mark=${marks[2]} color=$green text=$green ;;
-    warn) mark=${marks[3]} color=$yellow text=$yellow ;;
-    *) mark=${marks[4]} color=$red text=$red ;;
+    step) mark=${marks[0]} name=$bold$cyan text=$bold ;;
+    note) mark=${marks[1]} name=$bold text='' ;;
+    aside) mark=${marks[1]} name=$dim text=$dim ;;
+    ok) mark=${marks[2]} name=$bold$green text=$green ;;
+    warn) mark=${marks[3]} name=$bold$yellow text=$yellow ;;
+    *) mark=${marks[4]} name=$bold$red text=$red ;;
   esac
-  echo "${bold}${color}djdojo ${mark}${plain} ${text}$2${plain}" >&2
+  echo "${name}djdojo ${mark}${plain} ${text}$2${plain}" >&2
 }
 
 # A browser name becomes --cookies-from-browser, so yt-dlp uses your login from there. One profile
@@ -880,6 +883,6 @@ if (( failed > refused )); then
   msg note "Run the same command again to retry the failed tracks. Tracks that are removed or blocked on $site_name cannot be downloaded."
 fi
 if (( failed > 0 )) && [[ $view == calm ]]; then
-  msg note "Everything yt-dlp said is in $(pretty "$runlog")"
+  msg aside "(Everything yt-dlp said is in $(pretty "$runlog"))"
 fi
 exit "$status"
