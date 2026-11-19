@@ -4,6 +4,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-19
+
 ### Added
 
 - Age-restricted tracks that fail are listed at the end as links to YouTube Music, with what to do: name a logged-in browser when the run was without login, or open a link in the browser and confirm your age there. The track's own line says `failed: age-restricted` instead of yt-dlp's text about its cookie options.
@@ -84,7 +86,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/ronnidc/djdojo/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/ronnidc/djdojo/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/ronnidc/djdojo/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ronnidc/djdojo/compare/v1.1.1...v1.2.0
