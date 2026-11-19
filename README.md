@@ -164,6 +164,7 @@ file in the folder yourself.
 | `Video unavailable`                       | The track is removed or blocked on YouTube, cannot be downloaded |
 | `Requested format is not available`       | YouTube changed something, run `brew update && brew upgrade`     |
 | `HTTP Error 403: Forbidden`               | YouTube refused the track, update as above or add `nologin`      |
+| `age-restricted`                          | YouTube wants a login with a confirmed age, see below            |
 | `YouTube Music is not directly supported` | Only a warning, everything works                                 |
 | `only available for registered users`     | SoundCloud without login, the stream is used instead             |
 
@@ -173,6 +174,11 @@ show with `verbose` and in `~/.config/djdojo/last-run.log`.
 Failed tracks are counted at the end. Run the same command again to retry them, the downloaded
 ones are skipped. When YouTube refuses tracks with `HTTP Error 403`, `djdojo` says so and shows the
 command that downloads without login. Without YouTube Premium the audio is the same either way.
+
+YouTube only hands an age-restricted track to a login whose age it has confirmed. `djdojo` lists
+those tracks at the end as links. Without login, run the command with the browser's name:
+`djdojo PLxxxxxxxx chrome`. With login, open a link in that browser, confirm your age if YouTube
+asks, and run the same command again.
 
 Now and then YouTube offers a track only as a video. It is downloaded all the same, with the
 video's sound, which is 128k AAC, about half of Premium audio. `djdojo` lists those tracks at the

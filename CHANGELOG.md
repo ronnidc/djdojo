@@ -4,6 +4,10 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- Age-restricted tracks that fail are listed at the end as links to YouTube Music, with what to do: name a logged-in browser when the run was without login, or open a link in the browser and confirm your age there. The track's own line says `failed: age-restricted` instead of yt-dlp's text about its cookie options.
+
 ## [1.3.1] - 2026-11-12
 
 ### Changed

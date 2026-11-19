@@ -83,6 +83,11 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
   YouTube's PO token experiment on `web_embedded`). The pre-flight lookup does not see it, since
   the 403 comes on the audio request, not on the extraction. That is why `djdojo` leaves a
   login out when it gets no Premium audio for the first track.
+- An age-restricted track fails without login with `Sign in to confirm your age. This video may be
+  inappropriate for some users.`, except the few YouTube lets `web_embedded` play (`HtVdAasjOgU`
+  works, `Tq92D6wQ1mg` fails, yt-dlp 2026.10.26). With a login whose age YouTube has not verified,
+  which the EU requires, yt-dlp adds `web_creator`. `djdojo` matches the words yt-dlp's own
+  `_is_agegated` looks for (`aged`) and lists the tracks as links. The logged-in path is untested.
 - When no audio-only stream is left, `ba/b` falls back to itag 18, a 360p video whose sound was
   measured as AAC-LC 128k at 44.1 kHz. `djdojo` lists the new files that came that way. At
   `after_move` `filepath` is the finished file and `vcodec` is `none` for an audio stream. For a

@@ -615,6 +615,9 @@ before=$(wc -l < "$existing" | tr -d ' ')
 # for when that is not enough. yt-dlp marks the moments djdojo acts on with lines of its own that
 # start with $mark: the download of a track begins, its percentage, and the finished file.
 mark='@@djdojo'
+# How yt-dlp words YouTube's refusal of an age-restricted track: "Sign in to confirm your age. This
+# video may be inappropriate for some users." The same words yt-dlp itself looks for.
+aged='confirm your age|age-restricted|inappropriate for some users'
 runlog="$(dirname "$config")/last-run.log"
 
 # TEXT cut to at most WIDTH columns of the terminal. A character outside ASCII may take two
@@ -730,6 +733,10 @@ render() {
         if [[ $reason =~ $who ]]; then
           reason=${BASH_REMATCH[1]}
         fi
+        # yt-dlp's own reason goes on about its options. The summary says what to do instead.
+        if grep -qiE "$aged" <<< "$reason"; then
+          reason="age-restricted"
+        fi
         text=$(track_number)${title:+$title }
         if [[ -n $text ]]; then
           settle err "${text}failed: $reason"
@@ -832,6 +839,12 @@ failed=${failed:-0}
 # gets a different answer
 refused=$(grep -c 'ERROR:.*HTTP Error 403' "$errlog" || true)
 refused=${refused:-0}
+# Age-restricted tracks, as links to open in the browser: YouTube only hands them to a login whose
+# age it has confirmed, and the browser is where it asks. The error names the video's ID.
+restricted=()
+while IFS= read -r id; do
+  restricted+=("https://music.youtube.com/watch?v=$id")
+done < <(grep -iE "ERROR:.*($aged)" "$errlog" | sed -n 's/.*\[youtube\] \([0-9A-Za-z_-]\{11\}\): .*/\1/p' | sort -u)
 if (( after >= before )); then
   summary="Done. $((after - before)) .$format $(files $((after - before))) downloaded"
   if (( before > 0 )); then
@@ -879,7 +892,30 @@ if (( refused > 0 )); then
   esac
   msg warn "$hint"
 fi
-if (( failed > refused )); then
+if (( ${#restricted[@]} > 0 )); then
+  if (( ${#restricted[@]} == 1 )); then
+    msg warn "1 of the failed tracks is age-restricted on YouTube:"
+  else
+    msg warn "${#restricted[@]} of the failed tracks are age-restricted on YouTube:"
+  fi
+  for link in "${restricted[@]}"; do
+    echo "  $link" >&2
+  done
+  case $login in
+    none)
+      hint="They need a YouTube login. Run the command with the name of a browser that is logged in to YouTube"
+      if [[ -n $keep_login ]]; then
+        hint+=": $keep_login"
+      else
+        hint+=", such as chrome or firefox, instead of without login."
+      fi
+      ;;
+    file) hint="Open a link in the browser the cookies file came from. If YouTube asks you to confirm your age there, do so, export the cookies again and run the same command again." ;;
+    *) hint="Open a link in ${login_label:-$(login_name "$login")}. If YouTube asks you to confirm your age there, do so and run the same command again. If the track just plays, run \"brew update && brew upgrade\" and try again." ;;
+  esac
+  msg note "$hint"
+fi
+if (( failed > refused + ${#restricted[@]} )); then
   msg note "Run the same command again to retry the failed tracks. Tracks that are removed or blocked on $site_name cannot be downloaded."
 fi
 if (( failed > 0 )) && [[ $view == calm ]]; then
