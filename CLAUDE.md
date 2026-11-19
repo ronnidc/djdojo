@@ -39,6 +39,11 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
 - Messages and README say `brew update && brew upgrade`, never `brew upgrade` alone: Homebrew
   only runs `brew update` before it once every 24 hours (`HOMEBREW_AUTO_UPDATE_SECS`), so a user
   who updated earlier the same day would not get a release that just came out.
+- The output template in `djdojo.conf` is only what the lookup computes the folder from. For the
+  download `djdojo` appends its own `--output` to `ytdlp`: the number in front when asked for
+  (`numbered`, `numbers=yes`) or when the folder's files are numbered already, or the folder the
+  user chose (`choose_folder`, `$into`). A user's own `--output` comes later and wins, and
+  switches both off (`own_output`).
 - `djdojo` is for one playlist per run: the pre-flight lookup and the final count use the first URL,
   and its site (`site`, youtube or soundcloud) picks the login search and the wording.
 
@@ -55,6 +60,9 @@ need it, FLAC only on newer models, FAT32 sticks. One bash script (`djdojo`) and
 - `/` must be literal in an output template. A `/` produced inside a field is sanitized away.
 - A `--parse-metadata` group that does not match leaves the field unset, so `%(a,b|x)s`
   fallbacks keep working. `album_dir` relies on this.
+- The FROM of `--parse-metadata` is read as a field name when it is letters and underscores
+  only, so a literal text is written after a field that is never set: `%(djdojo_unset|)sDevel`.
+  A `%` in it is doubled and a `:` gets a backslash.
 - `--audio-format` has no AIFF, so AIFF goes through `--recode-video aiff`.
 - `--embed-thumbnail` cannot do AIFF either, and cannot scale a cover. `djdojo` passes
   `--write-thumbnail` for both formats and embeds the .jpg with ffmpeg (attached pic, plus

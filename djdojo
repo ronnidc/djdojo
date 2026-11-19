@@ -13,6 +13,7 @@ config=~/.config/djdojo/config
 format=aiff
 dest=~/Music/djdojo
 login_config=  # "no" or a browser name. Empty = search the browsers.
+numbers_config=no  # "yes" puts the track's number in the playlist in front of every file name
 
 # The browsers yt-dlp can read cookies from, as a word on the command line or in the settings file
 browsers='brave|chrome|chromium|edge|firefox|opera|safari|vivaldi|whale'
@@ -31,6 +32,7 @@ read_config() {
       format) format=$value ;;
       folder) dest=${value/#\~/$HOME} ;;
       login) login_config=$value ;;
+      numbers) numbers_config=$value ;;
     esac
   done < "$config"
 }
@@ -46,7 +48,7 @@ usage() {
     flac) flac_default=" (default)" ;;
   esac
   cat <<EOF
-Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [verbose] [yt-dlp options ...]
+Usage: djdojo PLAYLIST [aiff|flac] [chrome|safari|firefox|nologin] [numbered] [verbose] [yt-dlp options ...]
 
 Turns your YouTube or SoundCloud playlist into lossless audio files for DJ practice, the whole playlist in one folder.
 For private practice with music you have the right to download. For public or professional use, buy the music.
@@ -56,11 +58,13 @@ For private practice with music you have the right to download. For public or pr
   flac        same audio at half the size, Pioneer decks need CDJ-2000NXS2, XDJ-1000MK2 or newer$flac_default
   chrome ...  YouTube or SoundCloud login from that browser. Without one, Firefox, Safari and Chrome are tried
   nologin     without login, so without YouTube's Premium audio and SoundCloud's original files
+  numbered    file names start with the track's number in the playlist: 001 - Title
   verbose     shows everything yt-dlp says, instead of one line per track
 
 The default format and folder are chosen on the first run and stored in ~/.config/djdojo/config.
 Edit the file, or delete it to be asked again. The file can also hold the login: login=no, a
 browser name such as login=firefox, or one profile of a browser such as login=chrome:Profile 1.
+And numbers=yes, for numbered file names every time.
 EOF
 }
 
@@ -150,6 +154,8 @@ prev=
 login=  # browser name, "file" or "none". Empty = find a browser that is logged in.
 format_arg=
 view=calm  # one line per track, or "full": everything yt-dlp says, as it says it
+numbered=no
+own_output=no  # yes when the user's own --output decides folder and file names
 for a in "$@"; do
   if [[ $prev == --cookies-from-browser ]]; then
     args+=("$a")
@@ -162,6 +168,8 @@ for a in "$@"; do
     login=none
   elif [[ $a == verbose ]]; then
     view=full
+  elif [[ $a == numbered ]]; then
+    numbered=yes
   elif [[ $a == aiff || $a == flac ]]; then
     format_arg=$a
   elif [[ $a != -* && $a =~ ^[0-9A-Za-z_-]{11}$ ]]; then
@@ -172,6 +180,7 @@ for a in "$@"; do
     case $a in
       --cookies) login="file" ;;
       --no-cookies-from-browser) login=none ;;
+      -o|--output|--output=*) own_output=yes ;;
       -v|--verbose) view=full ;;  # yt-dlp's debug lines are asked for, so they are shown
     esac
     args+=("$a")
@@ -249,6 +258,10 @@ if [[ -f $config ]]; then
   fi
   if [[ -n $login_config && $login_config != no && ! $login_config =~ ^($browsers)(:.+)?$ ]]; then
     msg err "Unknown login \"$login_config\" in $(pretty "$config"). Write no, a browser name such as firefox, or a browser and one of its profiles such as chrome:Profile 1."
+    exit 1
+  fi
+  if [[ $numbers_config != yes && $numbers_config != no ]]; then
+    msg err "Unknown numbers \"$numbers_config\" in $(pretty "$config"). Write yes or no."
     exit 1
   fi
 elif [[ -t 0 ]]; then
@@ -564,6 +577,48 @@ esac
 if [[ -z $info ]]; then
   lookup
 fi
+# A handful of tracks is usually an addition to a folder that is there already, so in a terminal
+# djdojo offers the folders next to the playlist's own. Not when the playlist has its folder
+# already, since that is a rerun, and not when the user's own --output decides.
+# Sets $into to the chosen folder's name and $dir to its path. Uses the lookup's variables.
+into=
+choose_folder() {
+  local count=$pcount parent folder folders=() answer='' i word=tracks what
+  if [[ $ptitle == NA ]]; then
+    count=1
+  fi
+  what="$count tracks"
+  if [[ $count == 1 ]]; then
+    word=track what=track
+  fi
+  if [[ ! -t 0 || $own_output == yes || -d $dir || ! $count =~ ^[0-9]+$ ]] || (( count >= 10 )); then
+    return 0
+  fi
+  parent=$(dirname "$dir")
+  while IFS= read -r folder; do
+    folders+=("$folder")
+  done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sed 's|.*/||' | sort -f)
+  if (( ${#folders[@]} == 0 )); then
+    return 0
+  fi
+  read -r -p "Put the $what into a folder you already have? [y/N] " answer || true
+  case $answer in
+    y|Y|yes|YES) ;;
+    *) return 0 ;;
+  esac
+  for i in "${!folders[@]}"; do
+    echo "  $((i + 1))) ${folders[$i]}" >&2
+  done
+  answer=
+  read -r -p "Folder: " answer || true
+  if [[ $answer =~ ^[1-9][0-9]*$ ]] && (( answer <= ${#folders[@]} )); then
+    into=${folders[$((answer - 1))]}
+    dir=$parent/$into
+  else
+    msg note "No folder chosen, so the $word will get a folder of their own."
+  fi
+}
+
 dir=
 IFS=$'\t' read -r ptitle pcount title acodec abr format_id ext file <<< "$info" || true
 if [[ -n ${file:-} ]]; then
@@ -586,9 +641,30 @@ if [[ -n ${file:-} ]]; then
   else
     msg note "Audio: $acodec ${abr}k, not $premium quality"
   fi
+  choose_folder
   msg note "The playlist goes into \"$(pretty "$dir")\""
 else
   msg warn "Could not look it up in advance, downloading as $FORMAT $via"
+fi
+
+# File names. The number in front is asked for, with "numbered" or numbers=yes. A folder whose
+# files are numbered already keeps the numbers, or a rerun would not know its files by name and
+# download them all again. Tracks added to another folder never get one: the number is the place
+# in their own playlist, which says nothing there. Their album tag is the folder's name, so the
+# folder still gathers as one album. The tag's text follows a field that is never set, since a
+# text made of letters alone would be read as a field name.
+if [[ $own_output == no ]]; then
+  folder_part='%(album_dir,playlist_title,artists.0,artist,channel,uploader|Unknown artist)s'
+  number_part=
+  if [[ -n $into ]]; then
+    folder_part=${into//%/%%}
+    album=${folder_part//:/\\:}
+    ytdlp+=(--parse-metadata "%(djdojo_unset|)s$album:(?P<meta_album>.+)")
+  elif [[ $numbered == yes || $numbers_config == yes ]] \
+      || { [[ -n $dir ]] && [[ -n $(find "$dir" -maxdepth 1 -name "[0-9][0-9][0-9] - *.$format" -print -quit 2>/dev/null) ]]; }; then
+    number_part='%(playlist_index&{:03d} - |)s'
+  fi
+  ytdlp+=(--output "$folder_part/$number_part%(title)s.%(ext)s")
 fi
 
 # The names of the audio files in the playlist's folder. The folder does not exist before the

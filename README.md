@@ -65,6 +65,7 @@ djdojo PLxxxxxxxx flac        # FLAC instead of the default format, this once
 djdojo PLxxxxxxxx safari      # login from a specific browser
 djdojo LM                     # YouTube Music's "Liked Music"
 djdojo PLxxxxxxxx nologin     # without login, and without the Premium audio
+djdojo PLxxxxxxxx numbered    # file names start with the track's number: 001 - Title
 djdojo PLxxxxxxxx verbose     # everything yt-dlp says, instead of one line per track
 djdojo SOUNDCLOUD_LINK        # a SoundCloud playlist, album, profile or track
 djdojo --help
@@ -77,6 +78,19 @@ playlist is given as its link. Extra yt-dlp options can be passed along, for exa
 
 The playlist can be run again later. Files already in the folder are skipped, so only new tracks
 are downloaded.
+
+### Folders and file names
+
+A playlist gets a folder of its own, named after the playlist, and each file is named after its
+track: `Title.aiff`. With `numbered` the name starts with the track's number in the playlist,
+`001 - Title.aiff`, which keeps the playlist's order and lets two tracks with the same title sit
+side by side. `numbers=yes` in `~/.config/djdojo/config` does it every time. A folder whose files
+are numbered already keeps the numbers, so a rerun still skips what is there.
+
+When a playlist has fewer than 10 tracks, or it is a single track, `djdojo` asks whether to put
+them into a folder you already have, and lists the folders to choose from. Tracks added that way
+are never numbered, and their album tag is the folder's name. The question only comes in a
+terminal, and not for a playlist that has its own folder already.
 
 ### First run
 

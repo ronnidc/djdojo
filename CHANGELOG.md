@@ -4,6 +4,15 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- A playlist with fewer than 10 tracks, or a single track, can go into a folder that is there already: `djdojo` asks, lists the folders and takes the number of one. The tracks' album tag is then the folder's name.
+- `numbered` on the command line, or `numbers=yes` in `~/.config/djdojo/config`, puts the track's number in the playlist in front of the file name: `001 - Title.aiff`.
+
+### Changed
+
+- File names no longer start with the track's number, unless it is asked for with `numbered`. A folder whose files are numbered already keeps the numbers, so a rerun of an older playlist still skips the files that are there.
+
 ## [1.4.0] - 2026-11-19
 
 ### Added
