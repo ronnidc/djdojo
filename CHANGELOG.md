@@ -4,6 +4,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-19
+
 ### Added
 
 - A playlist with fewer than 10 tracks, or a single track, can go into a folder that is there already: `djdojo` asks, lists the folders and takes the number of one. The tracks' album tag is then the folder's name.
@@ -95,7 +97,8 @@ All notable changes to djdojo are documented here. The format follows [Keep a Ch
 - A playlist or a video can be given as its bare ID instead of the full link, including the IDs YouTube Music shows with a VL prefix.
 - Reports playlist name, track count, format, audio stream and folder before the download, and the number of downloaded, already present and failed tracks after.
 
-[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/ronnidc/djdojo/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/ronnidc/djdojo/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/ronnidc/djdojo/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/ronnidc/djdojo/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/ronnidc/djdojo/compare/v1.2.0...v1.3.0
